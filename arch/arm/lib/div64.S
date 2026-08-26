@@ -1,4 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *  linux/arch/arm/lib/div64.S
  *
@@ -7,13 +6,15 @@
  *  Author:	Nicolas Pitre
  *  Created:	Oct 5, 2003
  *  Copyright:	Monta Vista Software, Inc.
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License version 2 as
+ *  published by the Free Software Foundation.
  */
 
 #include <linux/linkage.h>
 #include <asm/assembler.h>
-#ifdef __UBOOT__
-#define UNWIND(x...)
-#endif
+#include <asm/unwind.h>
 
 #ifdef __ARMEB__
 #define xh r0
@@ -44,7 +45,6 @@
  * Clobbered regs: xl, ip
  */
 
-.pushsection .text.__do_div64, "ax"
 ENTRY(__do_div64)
 UNWIND(.fnstart)
 
@@ -88,8 +88,8 @@ UNWIND(.fnstart)
  	@ Break out early if dividend reaches 0.
 2:	cmp	xh, yl
 	orrcs	yh, yh, ip
-	subscs	xh, xh, yl
-	movsne	ip, ip, lsr #1
+	subcss	xh, xh, yl
+	movnes	ip, ip, lsr #1
 	mov	yl, yl, lsr #1
 	bne	2b
 
@@ -210,4 +210,3 @@ Ldiv0_64:
 
 UNWIND(.fnend)
 ENDPROC(__do_div64)
-.popsection

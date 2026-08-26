@@ -1,0 +1,17 @@
+#
+#Fingerprint
+#
+
+menuconfig INPUT_FINGERPRINT
+	bool "Touchscreens"
+	help
+	  Say Y here, and a list of supported touchscreens will be displayed.
+	  This option doesn't affect the kernel.
+
+	  If unsure, say Y.
+
+if INPUT_FINGERPRINT
+
+source "drivers/input/fingerprint/focaltech/Kconfig"
+
+endif

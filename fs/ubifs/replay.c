@@ -1,8 +1,20 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * This file is part of UBIFS.
  *
  * Copyright (C) 2006-2008 Nokia Corporation.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published by
+ * the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  *
  * Authors: Adrian Hunter
  *          Artem Bityutskiy (Битюцкий Артём)
@@ -20,12 +32,7 @@
  * larger is the journal, the more memory its index may consume.
  */
 
-#ifdef __UBOOT__
-#include <linux/compat.h>
-#include <linux/err.h>
-#endif
 #include "ubifs.h"
-#include <linux/bug.h>
 #include <linux/list_sort.h>
 
 /**
@@ -54,7 +61,7 @@ struct replay_entry {
 	struct list_head list;
 	union ubifs_key key;
 	union {
-		struct qstr nm;
+		struct fscrypt_name nm;
 		struct {
 			loff_t old_size;
 			loff_t new_size;
@@ -203,6 +210,38 @@ static int trun_remove_range(struct ubifs_info *c, struct replay_entry *r)
 }
 
 /**
+ * inode_still_linked - check whether inode in question will be re-linked.
+ * @c: UBIFS file-system description object
+ * @rino: replay entry to test
+ *
+ * O_TMPFILE files can be re-linked, this means link count goes from 0 to 1.
+ * This case needs special care, otherwise all references to the inode will
+ * be removed upon the first replay entry of an inode with link count 0
+ * is found.
+ */
+static bool inode_still_linked(struct ubifs_info *c, struct replay_entry *rino)
+{
+	struct replay_entry *r;
+
+	ubifs_assert(rino->deletion);
+	ubifs_assert(key_type(c, &rino->key) == UBIFS_INO_KEY);
+
+	/*
+	 * Find the most recent entry for the inode behind @rino and check
+	 * whether it is a deletion.
+	 */
+	list_for_each_entry_reverse(r, &c->replay_list, list) {
+		ubifs_assert(r->sqnum >= rino->sqnum);
+		if (key_inum(c, &r->key) == key_inum(c, &rino->key))
+			return r->deletion == 0;
+
+	}
+
+	ubifs_assert(0);
+	return false;
+}
+
+/**
  * apply_replay_entry - apply a replay entry to the TNC.
  * @c: UBIFS file-system description object
  * @r: replay entry to apply
@@ -232,6 +271,11 @@ static int apply_replay_entry(struct ubifs_info *c, struct replay_entry *r)
 			{
 				ino_t inum = key_inum(c, &r->key);
 
+				if (inode_still_linked(c, r)) {
+					err = 0;
+					break;
+				}
+
 				err = ubifs_tnc_remove_ino(c, inum);
 				break;
 			}
@@ -260,7 +304,7 @@ static int apply_replay_entry(struct ubifs_info *c, struct replay_entry *r)
  * replay_entries_cmp - compare 2 replay entries.
  * @priv: UBIFS file-system description object
  * @a: first replay entry
- * @a: second replay entry
+ * @b: second replay entry
  *
  * This is a comparios function for 'list_sort()' which compares 2 replay
  * entries @a and @b by comparing their sequence numer.  Returns %1 if @a has
@@ -320,7 +364,7 @@ static void destroy_replay_list(struct ubifs_info *c)
 
 	list_for_each_entry_safe(r, tmp, &c->replay_list, list) {
 		if (is_hash_key(c, &r->key))
-			kfree(r->nm.name);
+			kfree(fname_name(&r->nm));
 		list_del(&r->list);
 		kfree(r);
 	}
@@ -423,10 +467,10 @@ static int insert_dent(struct ubifs_info *c, int lnum, int offs, int len,
 	r->deletion = !!deletion;
 	r->sqnum = sqnum;
 	key_copy(c, key, &r->key);
-	r->nm.len = nlen;
+	fname_len(&r->nm) = nlen;
 	memcpy(nbuf, name, nlen);
 	nbuf[nlen] = '\0';
-	r->nm.name = nbuf;
+	fname_name(&r->nm) = nbuf;
 
 	list_add_tail(&r->list, &c->replay_list);
 	return 0;
@@ -449,7 +493,7 @@ int ubifs_validate_entry(struct ubifs_info *c,
 	if (le32_to_cpu(dent->ch.len) != nlen + UBIFS_DENT_NODE_SZ + 1 ||
 	    dent->type >= UBIFS_ITYPES_CNT ||
 	    nlen > UBIFS_MAX_NLEN || dent->name[nlen] != 0 ||
-	    strnlen(dent->name, nlen) != nlen ||
+	    (key_type == UBIFS_XENT_KEY && strnlen(dent->name, nlen) != nlen) ||
 	    le64_to_cpu(dent->inum) > MAX_INUM) {
 		ubifs_err(c, "bad %s node", key_type == UBIFS_DENT_KEY ?
 			  "directory entry" : "extended attribute entry");

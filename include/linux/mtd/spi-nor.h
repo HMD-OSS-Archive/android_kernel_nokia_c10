@@ -1,7 +1,10 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) 2014 Freescale Semiconductor, Inc.
- * Synced from Linux v4.19
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  */
 
 #ifndef __LINUX_MTD_SPI_NOR_H
@@ -20,8 +23,7 @@
 #define SNOR_MFR_ATMEL		CFI_MFR_ATMEL
 #define SNOR_MFR_GIGADEVICE	0xc8
 #define SNOR_MFR_INTEL		CFI_MFR_INTEL
-#define SNOR_MFR_ST		CFI_MFR_ST /* ST Micro <--> Micron */
-#define SNOR_MFR_MICRON		CFI_MFR_MICRON /* ST Micro <--> Micron */
+#define SNOR_MFR_MICRON		CFI_MFR_ST /* ST Micro <--> Micron */
 #define SNOR_MFR_MACRONIX	CFI_MFR_MACRONIX
 #define SNOR_MFR_SPANSION	CFI_MFR_AMD
 #define SNOR_MFR_SST		CFI_MFR_SST
@@ -59,9 +61,6 @@
 #define SPINOR_OP_RDSFDP	0x5a	/* Read SFDP */
 #define SPINOR_OP_RDCR		0x35	/* Read configuration register */
 #define SPINOR_OP_RDFSR		0x70	/* Read flag status register */
-#define SPINOR_OP_CLFSR		0x50	/* Clear flag status register */
-#define SPINOR_OP_RDEAR		0xc8	/* Read Extended Address Register */
-#define SPINOR_OP_WREAR		0xc5	/* Write Extended Address Register */
 
 /* 4-byte address opcodes - used on Spansion and some Macronix flashes. */
 #define SPINOR_OP_READ_4B	0x13	/* Read data bytes (low frequency) */
@@ -91,10 +90,6 @@
 #define SPINOR_OP_WRDI		0x04	/* Write disable */
 #define SPINOR_OP_AAI_WP	0xad	/* Auto address increment word program */
 
-/* Used for SST26* flashes only. */
-#define SPINOR_OP_READ_BPR	0x72	/* Read block protection register */
-#define SPINOR_OP_WRITE_BPR	0x42	/* Write block protection register */
-
 /* Used for S3AN flashes only */
 #define SPINOR_OP_XSE		0x50	/* Sector erase */
 #define SPINOR_OP_XPP		0x82	/* Page program */
@@ -103,13 +98,13 @@
 #define XSR_PAGESIZE		BIT(0)	/* Page size in Po2 or Linear */
 #define XSR_RDY			BIT(7)	/* Ready */
 
+
 /* Used for Macronix and Winbond flashes. */
 #define SPINOR_OP_EN4B		0xb7	/* Enter 4-byte mode */
 #define SPINOR_OP_EX4B		0xe9	/* Exit 4-byte mode */
 
 /* Used for Spansion flashes only. */
 #define SPINOR_OP_BRWR		0x17	/* Bank register write */
-#define SPINOR_OP_BRRD		0x16	/* Bank register read */
 #define SPINOR_OP_CLSR		0x30	/* Clear status register 1 */
 
 /* Used for Micron flashes only. */
@@ -135,10 +130,7 @@
 #define EVCR_QUAD_EN_MICRON	BIT(7)	/* Micron Quad I/O */
 
 /* Flag Status Register bits */
-#define FSR_READY		BIT(7)	/* Device status, 0 = Busy, 1 = Ready */
-#define FSR_E_ERR		BIT(5)	/* Erase operation status */
-#define FSR_P_ERR		BIT(4)	/* Program operation status */
-#define FSR_PT_ERR		BIT(1)	/* Protection error bit */
+#define FSR_READY		BIT(7)
 
 /* Configuration Register bits. */
 #define CR_QUAD_EN_SPAN		BIT(1)	/* Spansion Quad I/O */
@@ -237,39 +229,19 @@ enum spi_nor_option_flags {
 	SNOR_F_S3AN_ADDR_DEFAULT = BIT(3),
 	SNOR_F_READY_XSR_RDY	= BIT(4),
 	SNOR_F_USE_CLSR		= BIT(5),
-	SNOR_F_BROKEN_RESET	= BIT(6),
 };
-
-/**
- * struct flash_info - Forward declaration of a structure used internally by
- *		       spi_nor_scan()
- */
-struct flash_info;
-
-/*
- * TODO: Remove, once all users of spi_flash interface are moved to MTD
- *
- * struct spi_flash {
- *	Defined below (keep this text to enable searching for spi_flash decl)
- * }
- */
-#define spi_flash spi_nor
 
 /**
  * struct spi_nor - Structure for defining a the SPI NOR layer
  * @mtd:		point to a mtd_info structure
  * @lock:		the lock for the read/write/erase/lock/unlock operations
  * @dev:		point to a spi device, or a spi nor controller device.
- * @info:		spi-nor part JDEC MFR id and other info
  * @page_size:		the page size of the SPI NOR
  * @addr_width:		number of address bytes
  * @erase_opcode:	the opcode for erasing a sector
  * @read_opcode:	the read opcode
  * @read_dummy:		the dummy needed by the read operation
  * @program_opcode:	the program opcode
- * @bank_read_cmd:	Bank read cmd
- * @bank_write_cmd:	Bank write cmd
- * @bank_curr:		Current flash bank
  * @sst_write_second:	used by the SST write operation
  * @flags:		flag options for the current SPI-NOR (SNOR_F_*)
  * @read_proto:		the SPI protocol for read operations
@@ -290,26 +262,19 @@ struct flash_info;
  * @flash_lock:		[FLASH-SPECIFIC] lock a region of the SPI NOR
  * @flash_unlock:	[FLASH-SPECIFIC] unlock a region of the SPI NOR
  * @flash_is_locked:	[FLASH-SPECIFIC] check if a region of the SPI NOR is
- * @quad_enable:	[FLASH-SPECIFIC] enables SPI NOR quad mode
  *			completely locked
  * @priv:		the private data
  */
 struct spi_nor {
 	struct mtd_info		mtd;
-	struct udevice		*dev;
-	struct spi_slave	*spi;
-	const struct flash_info	*info;
+	struct mutex		lock;
+	struct device		*dev;
 	u32			page_size;
 	u8			addr_width;
 	u8			erase_opcode;
 	u8			read_opcode;
 	u8			read_dummy;
 	u8			program_opcode;
-#ifdef CONFIG_SPI_FLASH_BAR
-	u8			bank_read_cmd;
-	u8			bank_write_cmd;
-	u8			bank_curr;
-#endif
 	enum spi_nor_protocol	read_proto;
 	enum spi_nor_protocol	write_proto;
 	enum spi_nor_protocol	reg_proto;
@@ -325,30 +290,23 @@ struct spi_nor {
 	ssize_t (*read)(struct spi_nor *nor, loff_t from,
 			size_t len, u_char *read_buf);
 	ssize_t (*write)(struct spi_nor *nor, loff_t to,
-			 size_t len, const u_char *write_buf);
+			size_t len, const u_char *write_buf);
 	int (*erase)(struct spi_nor *nor, loff_t offs);
 
 	int (*flash_lock)(struct spi_nor *nor, loff_t ofs, uint64_t len);
 	int (*flash_unlock)(struct spi_nor *nor, loff_t ofs, uint64_t len);
 	int (*flash_is_locked)(struct spi_nor *nor, loff_t ofs, uint64_t len);
-	int (*quad_enable)(struct spi_nor *nor);
 
 	void *priv;
-/* Compatibility for spi_flash, remove once sf layer is merged with mtd */
-	const char *name;
-	u32 size;
-	u32 sector_size;
-	u32 erase_size;
 };
 
 static inline void spi_nor_set_flash_node(struct spi_nor *nor,
-					  const struct device_node *np)
+					  struct device_node *np)
 {
 	mtd_set_of_node(&nor->mtd, np);
 }
 
-static inline const struct
-device_node *spi_nor_get_flash_node(struct spi_nor *nor)
+static inline struct device_node *spi_nor_get_flash_node(struct spi_nor *nor)
 {
 	return mtd_get_of_node(&nor->mtd);
 }
@@ -417,13 +375,18 @@ struct spi_nor_hwcaps {
 /**
  * spi_nor_scan() - scan the SPI NOR
  * @nor:	the spi_nor structure
+ * @name:	the chip type name
+ * @hwcaps:	the hardware capabilities supported by the controller driver
  *
- * The drivers can use this function to scan the SPI NOR.
+ * The drivers can use this fuction to scan the SPI NOR.
  * In the scanning, it will try to get all the necessary information to
  * fill the mtd_info{} and the spi_nor{}.
  *
+ * The chip type name can be provided through the @name parameter.
+ *
  * Return: 0 for success, others for failure.
  */
-int spi_nor_scan(struct spi_nor *nor);
+int spi_nor_scan(struct spi_nor *nor, const char *name,
+		 const struct spi_nor_hwcaps *hwcaps);
 
 #endif

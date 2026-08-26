@@ -1,19 +1,29 @@
+# SPDX-License-Identifier: GPL-2.0
 #
-# Copyright (C) 2018 Amarula Solutions.
-#
-# SPDX-License-Identifier:      GPL-2.0+
+# Makefile for sunxi specific clk
 #
 
-obj-$(CONFIG_CLK_SUNXI) += clk_sunxi.o
+obj-y += clk-sunxi.o clk-factors.o
+obj-y += clk-a10-codec.o
+obj-y += clk-a10-hosc.o
+obj-y += clk-a10-mod1.o
+obj-y += clk-a10-pll2.o
+obj-y += clk-a10-ve.o
+obj-y += clk-a20-gmac.o
+obj-y += clk-mod0.o
+obj-y += clk-simple-gates.o
+obj-y += clk-sun4i-display.o
+obj-y += clk-sun4i-pll3.o
+obj-y += clk-sun4i-tcon-ch1.o
+obj-y += clk-sun8i-bus-gates.o
+obj-y += clk-sun8i-mbus.o
+obj-y += clk-sun9i-core.o
+obj-y += clk-sun9i-mmc.o
+obj-y += clk-usb.o
 
-obj-$(CONFIG_CLK_SUN4I_A10) += clk_a10.o
-obj-$(CONFIG_CLK_SUN5I_A10S) += clk_a10s.o
-obj-$(CONFIG_CLK_SUN6I_A31) += clk_a31.o
-obj-$(CONFIG_CLK_SUN8I_A23) += clk_a23.o
-obj-$(CONFIG_CLK_SUN8I_A83T) += clk_a83t.o
-obj-$(CONFIG_CLK_SUN8I_R40) += clk_r40.o
-obj-$(CONFIG_CLK_SUN8I_V3S) += clk_v3s.o
-obj-$(CONFIG_CLK_SUN9I_A80) += clk_a80.o
-obj-$(CONFIG_CLK_SUN8I_H3) += clk_h3.o
-obj-$(CONFIG_CLK_SUN50I_H6) += clk_h6.o
-obj-$(CONFIG_CLK_SUN50I_A64) += clk_a64.o
+obj-$(CONFIG_MACH_SUN9I) += clk-sun8i-apb0.o
+obj-$(CONFIG_MACH_SUN9I) += clk-sun9i-cpus.o
+
+obj-$(CONFIG_MFD_SUN6I_PRCM) += \
+	clk-sun6i-ar100.o clk-sun6i-apb0.o clk-sun6i-apb0-gates.o \
+	clk-sun8i-apb0.o

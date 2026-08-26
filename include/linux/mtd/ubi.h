@@ -1,6 +1,19 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (c) International Business Machines Corp., 2006
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See
+ * the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  *
  * Author: Artem Bityutskiy (Битюцкий Артём)
  */
@@ -8,12 +21,10 @@
 #ifndef __LINUX_UBI_H__
 #define __LINUX_UBI_H__
 
-#include <linux/types.h>
-#ifndef __UBOOT__
 #include <linux/ioctl.h>
+#include <linux/types.h>
 #include <linux/scatterlist.h>
 #include <mtd/ubi-user.h>
-#endif
 
 /* All voumes/LEBs */
 #define UBI_ALL -1
@@ -127,9 +138,7 @@ struct ubi_volume_info {
 struct ubi_sgl {
 	int list_pos;
 	int page_pos;
-#ifndef __UBOOT__
 	struct scatterlist sg[UBI_MAX_SG_COUNT];
-#endif
 };
 
 /**
@@ -184,9 +193,7 @@ struct ubi_device_info {
 	int min_io_size;
 	int max_write_size;
 	int ro_mode;
-#ifndef __UBOOT__
 	dev_t cdev;
-#endif
 };
 
 /*
@@ -235,21 +242,9 @@ struct ubi_volume_desc *ubi_open_volume_nm(int ubi_num, const char *name,
 					   int mode);
 struct ubi_volume_desc *ubi_open_volume_path(const char *pathname, int mode);
 
-#ifndef __UBOOT__
-typedef	int (*notifier_fn_t)(void *nb,
-			unsigned long action, void *data);
-
-struct notifier_block {
-	notifier_fn_t notifier_call;
-	struct notifier_block *next;
-	void *next;
-	int priority;
-};
-
 int ubi_register_volume_notifier(struct notifier_block *nb,
 				 int ignore_existing);
 int ubi_unregister_volume_notifier(struct notifier_block *nb);
-#endif
 
 void ubi_close_volume(struct ubi_volume_desc *desc);
 int ubi_leb_read(struct ubi_volume_desc *desc, int lnum, char *buf, int offset,

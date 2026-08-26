@@ -1,152 +1,265 @@
-// SPDX-License-Identifier: GPL-2.0+
-/*
- * Qualcomm EHCI driver
+/* ehci-msm.c - HSUSB Host Controller Driver Implementation
  *
- * (C) Copyright 2015 Mateusz Kulikowski <mateusz.kulikowski@gmail.com>
+ * Copyright (c) 2008-2011, Code Aurora Forum. All rights reserved.
  *
- * Based on Linux driver
+ * Partly derived from ehci-fsl.c and ehci-hcd.c
+ * Copyright (c) 2000-2004 by David Brownell
+ * Copyright (c) 2005 MontaVista Software
+ *
+ * All source code in this file is licensed under the following license except
+ * where indicated.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published
+ * by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ * See the GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, you can find it at http://www.fsf.org
  */
 
-#include <common.h>
-#include <dm.h>
-#include <errno.h>
-#include <fdtdec.h>
-#include <linux/libfdt.h>
-#include <usb.h>
-#include <usb/ehci-ci.h>
-#include <usb/ulpi.h>
-#include <wait_bit.h>
-#include <asm/gpio.h>
-#include <asm/io.h>
-#include <linux/compat.h>
+#include <linux/clk.h>
+#include <linux/err.h>
+#include <linux/io.h>
+#include <linux/kernel.h>
+#include <linux/module.h>
+#include <linux/platform_device.h>
+#include <linux/pm_runtime.h>
+#include <linux/usb/otg.h>
+#include <linux/usb/msm_hsusb_hw.h>
+#include <linux/usb.h>
+#include <linux/usb/hcd.h>
+#include <linux/acpi.h>
+
 #include "ehci.h"
 
-struct msm_ehci_priv {
-	struct ehci_ctrl ctrl; /* Needed by EHCI */
-	struct usb_ehci *ehci; /* Start of IP core*/
-	struct ulpi_viewport ulpi_vp; /* ULPI Viewport */
-	struct phy phy;
-};
+#define MSM_USB_BASE (hcd->regs)
 
-static int msm_init_after_reset(struct ehci_ctrl *dev)
+#define DRIVER_DESC "Qualcomm On-Chip EHCI Host Controller"
+
+static const char hcd_name[] = "ehci-msm";
+static struct hc_driver __read_mostly msm_hc_driver;
+
+static int ehci_msm_reset(struct usb_hcd *hcd)
 {
-	struct msm_ehci_priv *p = container_of(dev, struct msm_ehci_priv, ctrl);
-	struct usb_ehci *ehci = p->ehci;
+	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
+	int retval;
 
-	generic_phy_reset(&p->phy);
+	ehci->caps = USB_CAPLENGTH;
+	hcd->has_tt = 1;
 
-	/* set mode to host controller */
-	writel(CM_HOST, &ehci->usbmode);
+	retval = ehci_setup(hcd);
+	if (retval)
+		return retval;
+
+	/* select ULPI phy and clear other status/control bits in PORTSC */
+	writel(PORTSC_PTS_ULPI, USB_PORTSC);
+	/* bursts of unspecified length. */
+	writel(0, USB_AHBBURST);
+	/* Use the AHB transactor, allow posted data writes */
+	writel(0x8, USB_AHBMODE);
+	/* Disable streaming mode and select host mode */
+	writel(0x13, USB_USBMODE);
+	/* Disable ULPI_TX_PKT_EN_CLR_FIX which is valid only for HSIC */
+	writel(readl(USB_GENCONFIG_2) & ~ULPI_TX_PKT_EN_CLR_FIX, USB_GENCONFIG_2);
 
 	return 0;
 }
 
-static const struct ehci_ops msm_ehci_ops = {
-	.init_after_reset = msm_init_after_reset
-};
-
-static int ehci_usb_probe(struct udevice *dev)
+static int ehci_msm_probe(struct platform_device *pdev)
 {
-	struct msm_ehci_priv *p = dev_get_priv(dev);
-	struct usb_ehci *ehci = p->ehci;
-	struct usb_platdata *plat = dev_get_platdata(dev);
-	struct ehci_hccr *hccr;
-	struct ehci_hcor *hcor;
+	struct usb_hcd *hcd;
+	struct resource *res;
+	struct usb_phy *phy;
 	int ret;
 
-	hccr = (struct ehci_hccr *)((phys_addr_t)&ehci->caplength);
-	hcor = (struct ehci_hcor *)((phys_addr_t)hccr +
-			HC_LENGTH(ehci_readl(&(hccr)->cr_capbase)));
+	dev_dbg(&pdev->dev, "ehci_msm proble\n");
 
-	ret = ehci_setup_phy(dev, &p->phy, 0);
-	if (ret)
-		return ret;
+	hcd = usb_create_hcd(&msm_hc_driver, &pdev->dev, dev_name(&pdev->dev));
+	if (!hcd) {
+		dev_err(&pdev->dev, "Unable to create HCD\n");
+		return  -ENOMEM;
+	}
 
-	ret = board_usb_init(0, plat->init_type);
-	if (ret < 0)
-		return ret;
+	ret = platform_get_irq(pdev, 0);
+	if (ret < 0) {
+		dev_err(&pdev->dev, "Unable to get IRQ resource\n");
+		goto put_hcd;
+	}
+	hcd->irq = ret;
 
-	return ehci_register(dev, hccr, hcor, &msm_ehci_ops, 0,
-			     plat->init_type);
-}
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res) {
+		dev_err(&pdev->dev, "Unable to get memory resource\n");
+		ret = -ENODEV;
+		goto put_hcd;
+	}
 
-static int ehci_usb_remove(struct udevice *dev)
-{
-	struct msm_ehci_priv *p = dev_get_priv(dev);
-	struct usb_ehci *ehci = p->ehci;
-	int ret;
+	hcd->rsrc_start = res->start;
+	hcd->rsrc_len = resource_size(res);
+	hcd->regs = devm_ioremap(&pdev->dev, hcd->rsrc_start, hcd->rsrc_len);
+	if (!hcd->regs) {
+		dev_err(&pdev->dev, "ioremap failed\n");
+		ret = -ENOMEM;
+		goto put_hcd;
+	}
 
-	ret = ehci_deregister(dev);
-	if (ret)
-		return ret;
+	/*
+	 * If there is an OTG driver, let it take care of PHY initialization,
+	 * clock management, powering up VBUS, mapping of registers address
+	 * space and power management.
+	 */
+	if (pdev->dev.of_node)
+		phy = devm_usb_get_phy_by_phandle(&pdev->dev, "usb-phy", 0);
+	else
+		phy = devm_usb_get_phy(&pdev->dev, USB_PHY_TYPE_USB2);
 
-	/* Stop controller. */
-	clrbits_le32(&ehci->usbcmd, CMD_RUN);
+	if (IS_ERR(phy)) {
+		if (PTR_ERR(phy) == -EPROBE_DEFER) {
+			dev_err(&pdev->dev, "unable to find transceiver\n");
+			ret = -EPROBE_DEFER;
+			goto put_hcd;
+		}
+		phy = NULL;
+	}
 
-	ret = ehci_shutdown_phy(dev, &p->phy);
-	if (ret)
-		return ret;
+	hcd->usb_phy = phy;
+	device_init_wakeup(&pdev->dev, 1);
 
-	ret = board_usb_init(0, USB_INIT_DEVICE); /* Board specific hook */
-	if (ret < 0)
-		return ret;
+	if (phy && phy->otg) {
+		/*
+		 * MSM OTG driver takes care of adding the HCD and
+		 * placing hardware into low power mode via runtime PM.
+		 */
+		ret = otg_set_host(phy->otg, &hcd->self);
+		if (ret < 0) {
+			dev_err(&pdev->dev, "unable to register with transceiver\n");
+			goto put_hcd;
+		}
 
-	/* Reset controller */
-	setbits_le32(&ehci->usbcmd, CMD_RESET);
-
-	/* Wait for reset */
-	if (wait_for_bit_le32(&ehci->usbcmd, CMD_RESET, false, 30, false)) {
-		printf("Stuck on USB reset.\n");
-		return -ETIMEDOUT;
+		pm_runtime_no_callbacks(&pdev->dev);
+		pm_runtime_enable(&pdev->dev);
+	} else {
+		ret = usb_add_hcd(hcd, hcd->irq, IRQF_SHARED);
+		if (ret)
+			goto put_hcd;
 	}
 
 	return 0;
+
+put_hcd:
+	usb_put_hcd(hcd);
+
+	return ret;
 }
 
-static int ehci_usb_ofdata_to_platdata(struct udevice *dev)
+static int ehci_msm_remove(struct platform_device *pdev)
 {
-	struct msm_ehci_priv *priv = dev_get_priv(dev);
+	struct usb_hcd *hcd = platform_get_drvdata(pdev);
 
-	priv->ulpi_vp.port_num = 0;
-	priv->ehci = (void *)devfdt_get_addr(dev);
+	device_init_wakeup(&pdev->dev, 0);
+	pm_runtime_disable(&pdev->dev);
+	pm_runtime_set_suspended(&pdev->dev);
 
-	if (priv->ehci == (void *)FDT_ADDR_T_NONE)
-		return -EINVAL;
+	if (hcd->usb_phy && hcd->usb_phy->otg)
+		otg_set_host(hcd->usb_phy->otg, NULL);
+	else
+		usb_remove_hcd(hcd);
 
-	/* Warning: this will not work if viewport address is > 64 bit due to
-	 * ULPI design.
-	 */
-	priv->ulpi_vp.viewport_addr = (phys_addr_t)&priv->ehci->ulpi_viewpoint;
+	usb_put_hcd(hcd);
 
 	return 0;
 }
 
-#if defined(CONFIG_CI_UDC)
-/* Little quirk that MSM needs with Chipidea controller
- * Must reinit phy after reset
- */
-void ci_init_after_reset(struct ehci_ctrl *ctrl)
+#ifdef CONFIG_PM
+static int ehci_msm_pm_suspend(struct device *dev)
 {
-	struct msm_ehci_priv *p = ctrl->priv;
+	struct usb_hcd *hcd = dev_get_drvdata(dev);
+	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
+	bool do_wakeup = device_may_wakeup(dev);
 
-	generic_phy_reset(&p->phy);
+	dev_dbg(dev, "ehci-msm PM suspend\n");
+
+	/* Only call ehci_suspend if ehci_setup has been done */
+	if (ehci->sbrn)
+		return ehci_suspend(hcd, do_wakeup);
+
+	return 0;
 }
+
+static int ehci_msm_pm_resume(struct device *dev)
+{
+	struct usb_hcd *hcd = dev_get_drvdata(dev);
+	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
+
+	dev_dbg(dev, "ehci-msm PM resume\n");
+
+	/* Only call ehci_resume if ehci_setup has been done */
+	if (ehci->sbrn)
+		ehci_resume(hcd, false);
+
+	return 0;
+}
+
+#else
+#define ehci_msm_pm_suspend	NULL
+#define ehci_msm_pm_resume	NULL
 #endif
 
-static const struct udevice_id ehci_usb_ids[] = {
-	{ .compatible = "qcom,ehci-host", },
-	{ }
+static const struct dev_pm_ops ehci_msm_dev_pm_ops = {
+	.suspend         = ehci_msm_pm_suspend,
+	.resume          = ehci_msm_pm_resume,
 };
 
-U_BOOT_DRIVER(usb_ehci) = {
-	.name	= "ehci_msm",
-	.id	= UCLASS_USB,
-	.of_match = ehci_usb_ids,
-	.ofdata_to_platdata = ehci_usb_ofdata_to_platdata,
-	.probe = ehci_usb_probe,
-	.remove = ehci_usb_remove,
-	.ops	= &ehci_usb_ops,
-	.priv_auto_alloc_size = sizeof(struct msm_ehci_priv),
-	.platdata_auto_alloc_size = sizeof(struct usb_platdata),
-	.flags	= DM_FLAG_ALLOC_PRIV_DMA,
+static const struct acpi_device_id msm_ehci_acpi_ids[] = {
+	{ "QCOM8040", 0 },
+	{ }
 };
+MODULE_DEVICE_TABLE(acpi, msm_ehci_acpi_ids);
+
+static const struct of_device_id msm_ehci_dt_match[] = {
+	{ .compatible = "qcom,ehci-host", },
+	{}
+};
+MODULE_DEVICE_TABLE(of, msm_ehci_dt_match);
+
+static struct platform_driver ehci_msm_driver = {
+	.probe	= ehci_msm_probe,
+	.remove	= ehci_msm_remove,
+	.shutdown = usb_hcd_platform_shutdown,
+	.driver = {
+		   .name = "msm_hsusb_host",
+		   .pm = &ehci_msm_dev_pm_ops,
+		   .of_match_table = msm_ehci_dt_match,
+		   .acpi_match_table = ACPI_PTR(msm_ehci_acpi_ids),
+	},
+};
+
+static const struct ehci_driver_overrides msm_overrides __initconst = {
+	.reset = ehci_msm_reset,
+};
+
+static int __init ehci_msm_init(void)
+{
+	if (usb_disabled())
+		return -ENODEV;
+
+	pr_info("%s: " DRIVER_DESC "\n", hcd_name);
+	ehci_init_driver(&msm_hc_driver, &msm_overrides);
+	return platform_driver_register(&ehci_msm_driver);
+}
+module_init(ehci_msm_init);
+
+static void __exit ehci_msm_cleanup(void)
+{
+	platform_driver_unregister(&ehci_msm_driver);
+}
+module_exit(ehci_msm_cleanup);
+
+MODULE_DESCRIPTION(DRIVER_DESC);
+MODULE_ALIAS("platform:msm-ehci");
+MODULE_LICENSE("GPL");

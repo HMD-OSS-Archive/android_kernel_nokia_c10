@@ -1,124 +1,179 @@
-// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 /*
- * Copyright (C) 2018 Amarula Solutions.
- * Author: Jagan Teki <jagan@amarulasolutions.com>
+ * Allwinner SoCs Reset Controller driver
+ *
+ * Copyright 2013 Maxime Ripard
+ *
+ * Maxime Ripard <maxime.ripard@free-electrons.com>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  */
 
-#include <common.h>
-#include <dm.h>
-#include <errno.h>
-#include <reset-uclass.h>
-#include <asm/io.h>
-#include <dm/lists.h>
-#include <linux/log2.h>
-#include <asm/arch/ccu.h>
+#include <linux/err.h>
+#include <linux/io.h>
+#include <linux/init.h>
+#include <linux/of.h>
+#include <linux/of_address.h>
+#include <linux/platform_device.h>
+#include <linux/reset-controller.h>
+#include <linux/slab.h>
+#include <linux/spinlock.h>
+#include <linux/types.h>
 
-struct sunxi_reset_priv {
-	void *base;
-	ulong count;
-	const struct ccu_desc *desc;
+struct sunxi_reset_data {
+	spinlock_t			lock;
+	void __iomem			*membase;
+	struct reset_controller_dev	rcdev;
 };
 
-static const struct ccu_reset *priv_to_reset(struct sunxi_reset_priv *priv,
-					     unsigned long id)
+static int sunxi_reset_assert(struct reset_controller_dev *rcdev,
+			      unsigned long id)
 {
-	return	&priv->desc->resets[id];
-}
-
-static int sunxi_reset_request(struct reset_ctl *reset_ctl)
-{
-	struct sunxi_reset_priv *priv = dev_get_priv(reset_ctl->dev);
-
-	debug("%s: (RST#%ld)\n", __func__, reset_ctl->id);
-
-	if (reset_ctl->id >= priv->count)
-		return -EINVAL;
-
-	return 0;
-}
-
-static int sunxi_reset_free(struct reset_ctl *reset_ctl)
-{
-	debug("%s: (RST#%ld)\n", __func__, reset_ctl->id);
-
-	return 0;
-}
-
-static int sunxi_set_reset(struct reset_ctl *reset_ctl, bool on)
-{
-	struct sunxi_reset_priv *priv = dev_get_priv(reset_ctl->dev);
-	const struct ccu_reset *reset = priv_to_reset(priv, reset_ctl->id);
+	struct sunxi_reset_data *data = container_of(rcdev,
+						     struct sunxi_reset_data,
+						     rcdev);
+	int reg_width = sizeof(u32);
+	int bank = id / (reg_width * BITS_PER_BYTE);
+	int offset = id % (reg_width * BITS_PER_BYTE);
+	unsigned long flags;
 	u32 reg;
 
-	if (!(reset->flags & CCU_RST_F_IS_VALID)) {
-		printf("%s: (RST#%ld) unhandled\n", __func__, reset_ctl->id);
-		return 0;
-	}
+	spin_lock_irqsave(&data->lock, flags);
 
-	debug("%s: (RST#%ld) off#0x%x, BIT(%d)\n", __func__,
-	      reset_ctl->id, reset->off, ilog2(reset->bit));
+	reg = readl(data->membase + (bank * reg_width));
+	writel(reg & ~BIT(offset), data->membase + (bank * reg_width));
 
-	reg = readl(priv->base + reset->off);
-	if (on)
-		reg |= reset->bit;
-	else
-		reg &= ~reset->bit;
-
-	writel(reg, priv->base + reset->off);
+	spin_unlock_irqrestore(&data->lock, flags);
 
 	return 0;
 }
 
-static int sunxi_reset_assert(struct reset_ctl *reset_ctl)
+static int sunxi_reset_deassert(struct reset_controller_dev *rcdev,
+				unsigned long id)
 {
-	return sunxi_set_reset(reset_ctl, false);
+	struct sunxi_reset_data *data = container_of(rcdev,
+						     struct sunxi_reset_data,
+						     rcdev);
+	int reg_width = sizeof(u32);
+	int bank = id / (reg_width * BITS_PER_BYTE);
+	int offset = id % (reg_width * BITS_PER_BYTE);
+	unsigned long flags;
+	u32 reg;
+
+	spin_lock_irqsave(&data->lock, flags);
+
+	reg = readl(data->membase + (bank * reg_width));
+	writel(reg | BIT(offset), data->membase + (bank * reg_width));
+
+	spin_unlock_irqrestore(&data->lock, flags);
+
+	return 0;
 }
 
-static int sunxi_reset_deassert(struct reset_ctl *reset_ctl)
-{
-	return sunxi_set_reset(reset_ctl, true);
-}
-
-struct reset_ops sunxi_reset_ops = {
-	.request = sunxi_reset_request,
-	.free = sunxi_reset_free,
-	.rst_assert = sunxi_reset_assert,
-	.rst_deassert = sunxi_reset_deassert,
+static const struct reset_control_ops sunxi_reset_ops = {
+	.assert		= sunxi_reset_assert,
+	.deassert	= sunxi_reset_deassert,
 };
 
-static int sunxi_reset_probe(struct udevice *dev)
+static int sunxi_reset_init(struct device_node *np)
 {
-	struct sunxi_reset_priv *priv = dev_get_priv(dev);
-
-	priv->base = dev_read_addr_ptr(dev);
-
-	return 0;
-}
-
-int sunxi_reset_bind(struct udevice *dev, ulong count)
-{
-	struct udevice *rst_dev;
-	struct sunxi_reset_priv *priv;
+	struct sunxi_reset_data *data;
+	struct resource res;
+	resource_size_t size;
 	int ret;
 
-	ret = device_bind_driver_to_node(dev, "sunxi_reset", "reset",
-					 dev_ofnode(dev), &rst_dev);
-	if (ret) {
-		debug("failed to bind sunxi_reset driver (ret=%d)\n", ret);
-		return ret;
-	}
-	priv = malloc(sizeof(struct sunxi_reset_priv));
-	priv->count = count;
-	priv->desc = (const struct ccu_desc *)dev_get_driver_data(dev);
-	rst_dev->priv = priv;
+	data = kzalloc(sizeof(*data), GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
 
-	return 0;
+	ret = of_address_to_resource(np, 0, &res);
+	if (ret)
+		goto err_alloc;
+
+	size = resource_size(&res);
+	if (!request_mem_region(res.start, size, np->name)) {
+		ret = -EBUSY;
+		goto err_alloc;
+	}
+
+	data->membase = ioremap(res.start, size);
+	if (!data->membase) {
+		ret = -ENOMEM;
+		goto err_alloc;
+	}
+
+	spin_lock_init(&data->lock);
+
+	data->rcdev.owner = THIS_MODULE;
+	data->rcdev.nr_resets = size * 8;
+	data->rcdev.ops = &sunxi_reset_ops;
+	data->rcdev.of_node = np;
+
+	return reset_controller_register(&data->rcdev);
+
+err_alloc:
+	kfree(data);
+	return ret;
+};
+
+/*
+ * These are the reset controller we need to initialize early on in
+ * our system, before we can even think of using a regular device
+ * driver for it.
+ */
+static const struct of_device_id sunxi_early_reset_dt_ids[] __initconst = {
+	{ .compatible = "allwinner,sun6i-a31-ahb1-reset", },
+	{ /* sentinel */ },
+};
+
+void __init sun6i_reset_init(void)
+{
+	struct device_node *np;
+
+	for_each_matching_node(np, sunxi_early_reset_dt_ids)
+		sunxi_reset_init(np);
 }
 
-U_BOOT_DRIVER(sunxi_reset) = {
-	.name		= "sunxi_reset",
-	.id		= UCLASS_RESET,
-	.ops		= &sunxi_reset_ops,
-	.probe		= sunxi_reset_probe,
-	.priv_auto_alloc_size = sizeof(struct sunxi_reset_priv),
+/*
+ * And these are the controllers we can register through the regular
+ * device model.
+ */
+static const struct of_device_id sunxi_reset_dt_ids[] = {
+	 { .compatible = "allwinner,sun6i-a31-clock-reset", },
+	 { /* sentinel */ },
 };
+
+static int sunxi_reset_probe(struct platform_device *pdev)
+{
+	struct sunxi_reset_data *data;
+	struct resource *res;
+
+	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	data->membase = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(data->membase))
+		return PTR_ERR(data->membase);
+
+	spin_lock_init(&data->lock);
+
+	data->rcdev.owner = THIS_MODULE;
+	data->rcdev.nr_resets = resource_size(res) * 8;
+	data->rcdev.ops = &sunxi_reset_ops;
+	data->rcdev.of_node = pdev->dev.of_node;
+
+	return devm_reset_controller_register(&pdev->dev, &data->rcdev);
+}
+
+static struct platform_driver sunxi_reset_driver = {
+	.probe	= sunxi_reset_probe,
+	.driver = {
+		.name		= "sunxi-reset",
+		.of_match_table	= sunxi_reset_dt_ids,
+	},
+};
+builtin_platform_driver(sunxi_reset_driver);

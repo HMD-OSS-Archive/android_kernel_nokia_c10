@@ -1,8 +1,20 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * This file is part of UBIFS.
  *
  * Copyright (C) 2006-2008 Nokia Corporation.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published by
+ * the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  *
  * Authors: Adrian Hunter
  *          Artem Bityutskiy (Битюцкий Артём)
@@ -16,9 +28,6 @@
  * an empty LEB for the journal, or a very dirty LEB for garbage collection.
  */
 
-#ifdef __UBOOT__
-#include <linux/err.h>
-#endif
 #include "ubifs.h"
 
 /**
@@ -627,7 +636,7 @@ const struct ubifs_lprops *ubifs_change_lp(struct ubifs_info *c,
 /**
  * ubifs_get_lp_stats - get lprops statistics.
  * @c: UBIFS file-system description object
- * @st: return statistics
+ * @lst: return statistics
  */
 void ubifs_get_lp_stats(struct ubifs_info *c, struct ubifs_lp_stats *lst)
 {
@@ -1082,10 +1091,6 @@ static int scan_check_cb(struct ubifs_info *c,
 		}
 	}
 
-	buf = __vmalloc(c->leb_size, GFP_NOFS, PAGE_KERNEL);
-	if (!buf)
-		return -ENOMEM;
-
 	/*
 	 * After an unclean unmount, empty and freeable LEBs
 	 * may contain garbage - do not scan them.
@@ -1103,6 +1108,10 @@ static int scan_check_cb(struct ubifs_info *c,
 		lst->total_dark  +=  ubifs_calc_dark(c, c->leb_size);
 		return LPT_SCAN_CONTINUE;
 	}
+
+	buf = __vmalloc(c->leb_size, GFP_NOFS, PAGE_KERNEL);
+	if (!buf)
+		return -ENOMEM;
 
 	sleb = ubifs_scan(c, lnum, 0, buf, 0);
 	if (IS_ERR(sleb)) {

@@ -28,7 +28,7 @@ static void conf_message(const char *fmt, ...)
 	__attribute__ ((format (printf, 1, 2)));
 
 static const char *conf_filename;
-static int conf_lineno, conf_warnings;
+static int conf_lineno, conf_warnings, conf_unsaved;
 
 const char conf_defname[] = "arch/$ARCH/defconfig";
 
@@ -161,20 +161,24 @@ static int conf_set_sym_val(struct symbol *sym, int def, int def_flags, char *p)
 	case S_STRING:
 		if (*p++ != '"')
 			break;
-		/* Last char has to be a '"' */
-		if (p[strlen(p) - 1] != '"') {
+		for (p2 = p; (p2 = strpbrk(p2, "\"\\")); p2++) {
+			if (*p2 == '"') {
+				*p2 = 0;
+				break;
+			}
+			memmove(p2, p2 + 1, strlen(p2));
+		}
+		if (!p2) {
 			if (def != S_DEF_AUTO)
 				conf_warning("invalid string found");
 			return 1;
 		}
-		/* Overwrite '"' with \0 for string termination */
-		p[strlen(p) - 1] = 0;
 		/* fall through */
 	case S_INT:
 	case S_HEX:
 	done:
 		if (sym_string_valid(sym, p)) {
-			sym->def[def].val = xstrdup(p);
+			sym->def[def].val = strdup(p);
 			sym->flags |= def_flags;
 		} else {
 			if (def != S_DEF_AUTO)
@@ -197,7 +201,7 @@ static int add_byte(int c, char **lineptr, size_t slen, size_t *n)
 	if (new_size > *n) {
 		new_size += LINE_GROWTH - 1;
 		new_size *= 2;
-		nline = xrealloc(*lineptr, new_size);
+		nline = realloc(*lineptr, new_size);
 		if (!nline)
 			return -1;
 
@@ -286,6 +290,7 @@ load:
 	conf_filename = name;
 	conf_lineno = 0;
 	conf_warnings = 0;
+	conf_unsaved = 0;
 
 	def_flags = SYMBOL_DEF << def;
 	for_all_symbols(i, sym) {
@@ -404,7 +409,6 @@ setsym:
 int conf_read(const char *name)
 {
 	struct symbol *sym;
-	int conf_unsaved = 0;
 	int i;
 
 	sym_set_change_count(0);
@@ -626,7 +630,6 @@ static void conf_write_symbol(FILE *fp, struct symbol *sym,
 			      struct conf_printer *printer, void *printer_arg)
 {
 	const char *str;
-	char *str2;
 
 	switch (sym->type) {
 	case S_OTHER:
@@ -634,10 +637,9 @@ static void conf_write_symbol(FILE *fp, struct symbol *sym,
 		break;
 	case S_STRING:
 		str = sym_get_string_value(sym);
-		str2 = xmalloc(strlen(str) + 3);
-		sprintf(str2, "\"%s\"", str);
-		printer->print_symbol(fp, sym, str2, printer_arg);
-		free((void *)str2);
+		str = sym_escape_string_value(str);
+		printer->print_symbol(fp, sym, str, printer_arg);
+		free((void *)str);
 		break;
 	default:
 		str = sym_get_string_value(sym);
@@ -1121,7 +1123,7 @@ void set_all_choice_values(struct symbol *csym)
 bool conf_set_all_new_symbols(enum conf_def_mode mode)
 {
 	struct symbol *sym, *csym;
-	int i, cnt, pby, pty, ptm;	/* pby: probability of bool     = y
+	int i, cnt, pby, pty, ptm;	/* pby: probability of boolean  = y
 					 * pty: probability of tristate = y
 					 * ptm: probability of tristate = m
 					 */
@@ -1236,7 +1238,7 @@ bool conf_set_all_new_symbols(enum conf_def_mode mode)
 
 		sym_calc_value(csym);
 		if (mode == def_random)
-			has_changed = randomize_choice_values(csym);
+			has_changed |= randomize_choice_values(csym);
 		else {
 			set_all_choice_values(csym);
 			has_changed = true;

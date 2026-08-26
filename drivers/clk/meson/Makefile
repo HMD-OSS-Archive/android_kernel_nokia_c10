@@ -1,9 +1,7 @@
-# SPDX-License-Identifier: GPL-2.0
 #
-# Copyright (c) 2019 Baylibre, SAS
-# Jerome Brunet <jbrunet@baylibre.com>
+# Makefile for Meson specific clk
+#
 
-obj-$(CONFIG_CLK_MESON_GX) += gxbb.o
-obj-$(CONFIG_CLK_MESON_AXG) += axg.o
-obj-$(CONFIG_CLK_MESON_G12A) += g12a.o
-
+obj-$(CONFIG_COMMON_CLK_AMLOGIC) += clk-pll.o clk-cpu.o clk-mpll.o clk-audio-divider.o
+obj-$(CONFIG_COMMON_CLK_MESON8B) += meson8b.o
+obj-$(CONFIG_COMMON_CLK_GXBB)	 += gxbb.o gxbb-aoclk.o gxbb-aoclk-regmap.o gxbb-aoclk-32k.o

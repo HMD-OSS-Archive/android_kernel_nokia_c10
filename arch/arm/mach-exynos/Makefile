@@ -1,18 +1,24 @@
-# SPDX-License-Identifier: GPL-2.0+
+# arch/arm/mach-exynos/Makefile
 #
-# Copyright (C) 2009 Samsung Electronics
-# Minkyu Kang <mk7.kang@samsung.com>
+# Copyright (c) 2010-2011 Samsung Electronics Co., Ltd.
+#		http://www.samsung.com/
+#
+# Licensed under GPLv2
 
-obj-y	+= soc.o
-obj-$(CONFIG_CPU_V7A) += clock.o pinmux.o power.o system.o
-obj-$(CONFIG_ARM64)	+= mmu-arm64.o
+ccflags-$(CONFIG_ARCH_MULTIPLATFORM) += -I$(srctree)/$(src)/include -I$(srctree)/arch/arm/plat-samsung/include
 
-obj-$(CONFIG_EXYNOS5420)	+= sec_boot.o
+# Core
 
-ifdef CONFIG_SPL_BUILD
-obj-$(CONFIG_EXYNOS5)	+= clock_init_exynos5.o
-obj-$(CONFIG_EXYNOS5)	+= dmc_common.o dmc_init_ddr3.o
-obj-$(CONFIG_EXYNOS4210)+= dmc_init_exynos4.o clock_init_exynos4.o
-obj-y	+= spl_boot.o tzpc.o
-obj-y	+= lowlevel_init.o
-endif
+obj-$(CONFIG_ARCH_EXYNOS)	+= exynos.o exynos-smc.o firmware.o
+
+obj-$(CONFIG_EXYNOS_CPU_SUSPEND) += pm.o sleep.o
+obj-$(CONFIG_PM_SLEEP)		+= suspend.o
+
+obj-$(CONFIG_SMP)		+= platsmp.o headsmp.o
+
+plus_sec := $(call as-instr,.arch_extension sec,+sec)
+AFLAGS_exynos-smc.o		:=-Wa,-march=armv7-a$(plus_sec)
+AFLAGS_sleep.o			:=-Wa,-march=armv7-a$(plus_sec)
+
+obj-$(CONFIG_EXYNOS5420_MCPM)	+= mcpm-exynos.o
+CFLAGS_mcpm-exynos.o		+= -march=armv7-a

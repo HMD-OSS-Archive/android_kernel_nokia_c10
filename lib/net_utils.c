@@ -1,58 +1,27 @@
-// SPDX-License-Identifier: GPL-2.0+
-/*
- * Generic network code. Moved from net.c
- *
- * Copyright 1994 - 2000 Neil Russell.
- * Copyright 2000 Roland Borde
- * Copyright 2000 Paolo Scaffardi
- * Copyright 2000-2002 Wolfgang Denk, wd@denx.de
- * Copyright 2009 Dirk Behme, dirk.behme@googlemail.com
- */
+// SPDX-License-Identifier: GPL-2.0
+#include <linux/string.h>
+#include <linux/if_ether.h>
+#include <linux/ctype.h>
+#include <linux/kernel.h>
 
-#include <common.h>
-
-struct in_addr string_to_ip(const char *s)
+bool mac_pton(const char *s, u8 *mac)
 {
-	struct in_addr addr;
-	char *e;
 	int i;
 
-	addr.s_addr = 0;
-	if (s == NULL)
-		return addr;
+	/* XX:XX:XX:XX:XX:XX */
+	if (strlen(s) < 3 * ETH_ALEN - 1)
+		return false;
 
-	for (addr.s_addr = 0, i = 0; i < 4; ++i) {
-		ulong val = s ? simple_strtoul(s, &e, 10) : 0;
-		if (val > 255) {
-			addr.s_addr = 0;
-			return addr;
-		}
-		if (i != 3 && *e != '.') {
-			addr.s_addr = 0;
-			return addr;
-		}
-		addr.s_addr <<= 8;
-		addr.s_addr |= (val & 0xFF);
-		if (s) {
-			s = (*e) ? e+1 : e;
-		}
+	/* Don't dirty result unless string is valid MAC. */
+	for (i = 0; i < ETH_ALEN; i++) {
+		if (!isxdigit(s[i * 3]) || !isxdigit(s[i * 3 + 1]))
+			return false;
+		if (i != ETH_ALEN - 1 && s[i * 3 + 2] != ':')
+			return false;
 	}
-
-	addr.s_addr = htonl(addr.s_addr);
-	return addr;
-}
-
-void string_to_enetaddr(const char *addr, uint8_t *enetaddr)
-{
-	char *end;
-	int i;
-
-	if (!enetaddr)
-		return;
-
-	for (i = 0; i < 6; ++i) {
-		enetaddr[i] = addr ? simple_strtoul(addr, &end, 16) : 0;
-		if (addr)
-			addr = (*end) ? end + 1 : end;
+	for (i = 0; i < ETH_ALEN; i++) {
+		mac[i] = (hex_to_bin(s[i * 3]) << 4) | hex_to_bin(s[i * 3 + 1]);
 	}
+	return true;
 }
+EXPORT_SYMBOL(mac_pton);

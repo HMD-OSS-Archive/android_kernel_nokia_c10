@@ -12,7 +12,7 @@ include scripts/Kbuild.include
 
 # The filename Kbuild has precedence over Makefile
 kbuild-dir := $(if $(filter /%,$(src)),$(src),$(srctree)/$(src))
-include $(if $(wildcard $(kbuild-dir)/Kbuild), $(kbuild-dir)/Kbuild, $(kbuild-dir)/Makefile)
+-include $(if $(wildcard $(kbuild-dir)/Kbuild), $(kbuild-dir)/Kbuild, $(kbuild-dir)/Makefile)
 
 # Figure out what we need to build from the various variables
 # ==========================================================================
@@ -33,18 +33,15 @@ subdir-ymn      := $(sort $(subdir-ym) $(subdir-))
 
 subdir-ymn	:= $(addprefix $(obj)/,$(subdir-ymn))
 
-# Temporal work-around for U-Boot
-
-subdir-ymn	:= $(foreach f, $(subdir-ymn), \
-				$(if $(wildcard $(srctree)/$f/Makefile),$f))
-
 # build a list of files to remove, usually relative to the current
 # directory
 
 __clean-files	:= $(extra-y) $(extra-m) $(extra-)       \
 		   $(always) $(targets) $(clean-files)   \
 		   $(host-progs)                         \
-		   $(hostprogs-y) $(hostprogs-m) $(hostprogs-)
+		   $(hostprogs-y) $(hostprogs-m) $(hostprogs-) \
+		   $(hostlibs-y) $(hostlibs-m) $(hostlibs-) \
+		   $(hostcxxlibs-y) $(hostcxxlibs-m)
 
 __clean-files   := $(filter-out $(no-clean-files), $(__clean-files))
 

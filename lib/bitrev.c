@@ -1,8 +1,6 @@
-// SPDX-License-Identifier: GPL-2.0
-
 #ifndef CONFIG_HAVE_ARCH_BITREVERSE
 #include <linux/types.h>
-#include <linux/compat.h>
+#include <linux/module.h>
 #include <linux/bitrev.h>
 
 MODULE_AUTHOR("Akinobu Mita <akinobu.mita@gmail.com>");

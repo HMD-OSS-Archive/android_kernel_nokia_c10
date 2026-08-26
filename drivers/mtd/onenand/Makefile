@@ -1,11 +1,14 @@
-# SPDX-License-Identifier: GPL-2.0+
+# SPDX-License-Identifier: GPL-2.0
 #
-# Copyright (C) 2005-2007 Samsung Electronics.
-# Kyungmin Park <kyungmin.park@samsung.com>
+# Makefile for the OneNAND MTD
+#
 
-ifndef	CONFIG_SPL_BUILD
-obj-$(CONFIG_CMD_ONENAND)	:= onenand_uboot.o onenand_base.o onenand_bbt.o
-obj-$(CONFIG_SAMSUNG_ONENAND)	+= samsung.o
-else
-obj-y				:= onenand_spl.o
-endif
+# Core functionality.
+obj-$(CONFIG_MTD_ONENAND)		+= onenand.o
+
+# Board specific.
+obj-$(CONFIG_MTD_ONENAND_GENERIC)	+= generic.o
+obj-$(CONFIG_MTD_ONENAND_OMAP2)		+= omap2.o
+obj-$(CONFIG_MTD_ONENAND_SAMSUNG)       += samsung.o
+
+onenand-objs = onenand_base.o onenand_bbt.o

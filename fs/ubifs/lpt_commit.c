@@ -1,8 +1,20 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * This file is part of UBIFS.
  *
  * Copyright (C) 2006-2008 Nokia Corporation.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published by
+ * the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  *
  * Authors: Adrian Hunter
  *          Artem Bityutskiy (Битюцкий Артём)
@@ -13,24 +25,15 @@
  * subsystem.
  */
 
-#ifndef __UBOOT__
 #include <linux/crc16.h>
 #include <linux/slab.h>
 #include <linux/random.h>
-#else
-#include <linux/compat.h>
-#include <linux/err.h>
-#include "crc16.h"
-#endif
 #include "ubifs.h"
 
-#ifndef __UBOOT__
 static int dbg_populate_lsave(struct ubifs_info *c);
-#endif
 
 /**
  * first_dirty_cnode - find first dirty cnode.
- * @c: UBIFS file-system description object
  * @nnode: nnode at which to start
  *
  * This function returns the first dirty cnode or %NULL if there is not one.
@@ -323,7 +326,6 @@ no_space:
 	return err;
 }
 
-#ifndef __UBOOT__
 /**
  * realloc_lpt_leb - allocate an LPT LEB that is empty.
  * @c: UBIFS file-system description object
@@ -547,7 +549,6 @@ no_space:
 	dump_stack();
 	return err;
 }
-#endif
 
 /**
  * next_pnode_to_dirty - find next pnode to dirty.
@@ -811,10 +812,8 @@ static void populate_lsave(struct ubifs_info *c)
 		ubifs_add_lpt_dirt(c, c->lsave_lnum, c->lsave_sz);
 	}
 
-#ifndef __UBOOT__
 	if (dbg_populate_lsave(c))
 		return;
-#endif
 
 	list_for_each_entry(lprops, &c->empty_list, list) {
 		c->lsave[cnt++] = lprops->lnum;
@@ -1310,7 +1309,6 @@ static void free_obsolete_cnodes(struct ubifs_info *c)
 	c->lpt_cnext = NULL;
 }
 
-#ifndef __UBOOT__
 /**
  * ubifs_lpt_end_commit - finish the commit operation.
  * @c: the UBIFS file-system description object
@@ -1339,7 +1337,6 @@ int ubifs_lpt_end_commit(struct ubifs_info *c)
 
 	return 0;
 }
-#endif
 
 /**
  * ubifs_lpt_post_commit - post commit LPT trivial GC and LPT GC.
@@ -1489,7 +1486,6 @@ void ubifs_lpt_free(struct ubifs_info *c, int wr_only)
 	kfree(c->lpt_nod_buf);
 }
 
-#ifndef __UBOOT__
 /*
  * Everything below is related to debugging.
  */
@@ -1626,7 +1622,6 @@ static int dbg_is_node_dirty(struct ubifs_info *c, int node_type, int lnum,
  * dbg_check_ltab_lnum - check the ltab for a LPT LEB number.
  * @c: the UBIFS file-system description object
  * @lnum: LEB number where node was written
- * @offs: offset where node was written
  *
  * This function returns %0 on success and a negative error code on failure.
  */
@@ -1873,7 +1868,7 @@ int dbg_chk_lpt_sz(struct ubifs_info *c, int action, int len)
 }
 
 /**
- * ubifs_dump_lpt_leb - dump an LPT LEB.
+ * dump_lpt_leb - dump an LPT LEB.
  * @c: UBIFS file-system description object
  * @lnum: LEB number to dump
  *
@@ -2038,4 +2033,3 @@ static int dbg_populate_lsave(struct ubifs_info *c)
 
 	return 1;
 }
-#endif

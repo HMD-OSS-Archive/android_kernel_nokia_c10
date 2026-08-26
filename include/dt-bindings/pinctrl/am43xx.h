@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * This header provides constants specific to AM43XX pinctrl bindings.
  */
@@ -14,6 +15,7 @@
 #define MUX_MODE6	6
 #define MUX_MODE7	7
 #define MUX_MODE8	8
+#define MUX_MODE9	9
 
 #define PULL_DISABLE		(1 << 16)
 #define PULL_UP			(1 << 17)
@@ -37,3 +39,4 @@
 #define AM4372_IOPAD(pa, val)	(((pa) & 0xffff) - 0x0800) (val)
 
 #endif
+

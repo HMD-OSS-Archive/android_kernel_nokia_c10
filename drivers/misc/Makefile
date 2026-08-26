@@ -1,70 +1,86 @@
-# SPDX-License-Identifier: GPL-2.0+
+# SPDX-License-Identifier: GPL-2.0
 #
-# (C) Copyright 2000-2007
-# Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+# Makefile for misc devices that really don't fit anywhere else.
+#
 
-obj-$(CONFIG_MISC) += misc-uclass.o
+obj-$(CONFIG_IBM_ASM)		+= ibmasm/
+obj-$(CONFIG_AD525X_DPOT)	+= ad525x_dpot.o
+obj-$(CONFIG_AD525X_DPOT_I2C)	+= ad525x_dpot-i2c.o
+obj-$(CONFIG_AD525X_DPOT_SPI)	+= ad525x_dpot-spi.o
+obj-$(CONFIG_INTEL_MID_PTI)	+= pti.o
+obj-$(CONFIG_ATMEL_SSC)		+= atmel-ssc.o
+obj-$(CONFIG_ATMEL_TCLIB)	+= atmel_tclib.o
+obj-$(CONFIG_DUMMY_IRQ)		+= dummy-irq.o
+obj-$(CONFIG_ICS932S401)	+= ics932s401.o
+obj-$(CONFIG_LKDTM)		+= lkdtm.o
+obj-$(CONFIG_TIFM_CORE)       	+= tifm_core.o
+obj-$(CONFIG_TIFM_7XX1)       	+= tifm_7xx1.o
+obj-$(CONFIG_PHANTOM)		+= phantom.o
+obj-$(CONFIG_QCOM_COINCELL)	+= qcom-coincell.o
+obj-$(CONFIG_SENSORS_BH1770)	+= bh1770glc.o
+obj-$(CONFIG_SENSORS_APDS990X)	+= apds990x.o
+obj-$(CONFIG_SGI_IOC4)		+= ioc4.o
+obj-$(CONFIG_ENCLOSURE_SERVICES) += enclosure.o
+obj-$(CONFIG_KGDB_TESTS)	+= kgdbts.o
+obj-$(CONFIG_SGI_XP)		+= sgi-xp/
+obj-$(CONFIG_SGI_GRU)		+= sgi-gru/
+obj-$(CONFIG_CS5535_MFGPT)	+= cs5535-mfgpt.o
+obj-$(CONFIG_HP_ILO)		+= hpilo.o
+obj-$(CONFIG_APDS9802ALS)	+= apds9802als.o
+obj-$(CONFIG_ISL29003)		+= isl29003.o
+obj-$(CONFIG_ISL29020)		+= isl29020.o
+obj-$(CONFIG_SENSORS_TSL2550)	+= tsl2550.o
+obj-$(CONFIG_DS1682)		+= ds1682.o
+obj-$(CONFIG_TI_DAC7512)	+= ti_dac7512.o
+obj-$(CONFIG_C2PORT)		+= c2port/
+obj-$(CONFIG_HMC6352)		+= hmc6352.o
+obj-y				+= eeprom/
+obj-y				+= cb710/
+obj-$(CONFIG_SPEAR13XX_PCIE_GADGET)	+= spear13xx_pcie_gadget.o
+obj-$(CONFIG_VMWARE_BALLOON)	+= vmw_balloon.o
+obj-$(CONFIG_PCH_PHUB)		+= pch_phub.o
+obj-y				+= ti-st/
+obj-y				+= lis3lv02d/
+obj-$(CONFIG_USB_SWITCH_FSA9480) += fsa9480.o
+obj-$(CONFIG_ALTERA_STAPL)	+=altera-stapl/
+obj-$(CONFIG_INTEL_MEI)		+= mei/
+obj-$(CONFIG_VMWARE_VMCI)	+= vmw_vmci/
+obj-$(CONFIG_LATTICE_ECP3_CONFIG)	+= lattice-ecp3-config.o
+obj-$(CONFIG_SRAM)		+= sram.o
+obj-$(CONFIG_SRAM_EXEC)		+= sram-exec.o
+obj-y				+= mic/
+obj-$(CONFIG_GENWQE)		+= genwqe/
+obj-$(CONFIG_ECHO)		+= echo/
+obj-$(CONFIG_VEXPRESS_SYSCFG)	+= vexpress-syscfg.o
+obj-$(CONFIG_CXL_BASE)		+= cxl/
+obj-$(CONFIG_SPRD_VSP)          += sprd_vsp/
+obj-$(CONFIG_SPRD_JPG)          += sprd_jpg/
+obj-$(CONFIG_ASPEED_LPC_CTRL)	+= aspeed-lpc-ctrl.o
+obj-$(CONFIG_ASPEED_LPC_SNOOP)	+= aspeed-lpc-snoop.o
+obj-$(CONFIG_PCI_ENDPOINT_TEST)	+= pci_endpoint_test.o
+obj-y				+= sprdwcn/
+obj-$(CONFIG_UID_SYS_STATS)	+= uid_sys_stats.o
+obj-$(CONFIG_MEMORY_STATE_TIME)	+= memory_state_time.o
+obj-y				+= sprd_apdu/
 
-obj-$(CONFIG_$(SPL_TPL_)CROS_EC) += cros_ec.o
-obj-$(CONFIG_$(SPL_TPL_)CROS_EC_SANDBOX) += cros_ec_sandbox.o
-obj-$(CONFIG_$(SPL_TPL_)CROS_EC_LPC) += cros_ec_lpc.o
+lkdtm-$(CONFIG_LKDTM)		+= lkdtm_core.o
+lkdtm-$(CONFIG_LKDTM)		+= lkdtm_bugs.o
+lkdtm-$(CONFIG_LKDTM)		+= lkdtm_heap.o
+lkdtm-$(CONFIG_LKDTM)		+= lkdtm_perms.o
+lkdtm-$(CONFIG_LKDTM)		+= lkdtm_refcount.o
+lkdtm-$(CONFIG_LKDTM)		+= lkdtm_rodata_objcopy.o
+lkdtm-$(CONFIG_LKDTM)		+= lkdtm_usercopy.o
+obj-y 				+= sprd_audio/
+obj-y				+= sprd_map/
 
-ifndef CONFIG_SPL_BUILD
-obj-$(CONFIG_CROS_EC_I2C) += cros_ec_i2c.o
-obj-$(CONFIG_CROS_EC_SPI) += cros_ec_spi.o
-obj-$(CONFIG_SANDBOX) += swap_case.o
-endif
+obj-$(CONFIG_HWINFO_SUPPORT) += hwinfo/
 
-ifdef CONFIG_DM_I2C
-ifndef CONFIG_SPL_BUILD
-obj-$(CONFIG_SANDBOX) += i2c_eeprom_emul.o
-endif
-endif
-ifdef CONFIG_SPL_OF_PLATDATA
-ifdef CONFIG_SPL_BUILD
-obj-$(CONFIG_SANDBOX) += spltest_sandbox.o
-endif
-endif
-obj-$(CONFIG_ALI152X) += ali512x.o
-obj-$(CONFIG_ALTERA_SYSID) += altera_sysid.o
-obj-$(CONFIG_ATSHA204A) += atsha204a-i2c.o
-obj-$(CONFIG_CBMEM_CONSOLE) += cbmem_console.o
-obj-$(CONFIG_DS4510)  += ds4510.o
-obj-$(CONFIG_FSL_DEVICE_DISABLE) += fsl_devdis.o
-obj-$(CONFIG_FSL_IFC) += fsl_ifc.o
-obj-$(CONFIG_FSL_IIM) += fsl_iim.o
-obj-$(CONFIG_FSL_MC9SDZ60) += mc9sdz60.o
-obj-$(CONFIG_FSL_SEC_MON) += fsl_sec_mon.o
-obj-$(CONFIG_FS_LOADER) += fs_loader.o
-obj-$(CONFIG_GDSYS_IOEP) += gdsys_ioep.o
-obj-$(CONFIG_GDSYS_RXAUI_CTRL) += gdsys_rxaui_ctrl.o
-obj-$(CONFIG_GDSYS_SOC) += gdsys_soc.o
-obj-$(CONFIG_$(SPL_)I2C_EEPROM) += i2c_eeprom.o
-obj-$(CONFIG_IHS_FPGA) += ihs_fpga.o
-obj-$(CONFIG_IMX8) += imx8/
-obj-$(CONFIG_LED_STATUS) += status_led.o
-obj-$(CONFIG_LED_STATUS_GPIO) += gpio_led.o
-obj-$(CONFIG_MPC83XX_SERDES) += mpc83xx_serdes.o
-obj-$(CONFIG_MXC_OCOTP) += mxc_ocotp.o
-obj-$(CONFIG_MXS_OCOTP) += mxs_ocotp.o
-obj-$(CONFIG_NS87308) += ns87308.o
-obj-$(CONFIG_NUVOTON_NCT6102D) += nuvoton_nct6102d.o
-obj-$(CONFIG_PCA9551_LED) += pca9551_led.o
-obj-$(CONFIG_$(SPL_)PWRSEQ) += pwrseq-uclass.o
-obj-$(CONFIG_QFW) += qfw.o
-obj-$(CONFIG_ROCKCHIP_EFUSE) += rockchip-efuse.o
-obj-$(CONFIG_ROCKCHIP_OTP) += rockchip-otp.o
-obj-$(CONFIG_SANDBOX) += syscon_sandbox.o misc_sandbox.o
-obj-$(CONFIG_SMSC_LPC47M) += smsc_lpc47m.o
-obj-$(CONFIG_SMSC_SIO1007) += smsc_sio1007.o
-obj-$(CONFIG_STM32MP_FUSE) += stm32mp_fuse.o
-obj-$(CONFIG_STM32_RCC) += stm32_rcc.o
-obj-$(CONFIG_SYS_DPAA_QBMAN) += fsl_portals.o
-obj-$(CONFIG_TEGRA186_BPMP) += tegra186_bpmp.o
-obj-$(CONFIG_TEGRA_CAR) += tegra_car.o
-obj-$(CONFIG_TWL4030_LED) += twl4030_led.o
-obj-$(CONFIG_VEXPRESS_CONFIG) += vexpress_config.o
-obj-$(CONFIG_WINBOND_W83627) += winbond_w83627.o
-obj-$(CONFIG_JZ4780_EFUSE) += jz4780_efuse.o
-obj-$(CONFIG_MICROCHIP_FLEXCOM) += microchip_flexcom.o
-obj-$(CONFIG_K3_AVS0) += k3_avs.o
+KCOV_INSTRUMENT_lkdtm_rodata.o	:= n
+CFLAGS_lkdtm_rodata.o		+= $(DISABLE_LTO)
+
+OBJCOPYFLAGS :=
+OBJCOPYFLAGS_lkdtm_rodata_objcopy.o := \
+	--rename-section .text=.rodata,alloc,readonly,load
+targets += lkdtm_rodata.o lkdtm_rodata_objcopy.o
+$(obj)/lkdtm_rodata_objcopy.o: $(obj)/lkdtm_rodata.o FORCE
+	$(call if_changed,objcopy)

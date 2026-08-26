@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * MTD device concatenation layer
  *
@@ -7,25 +6,33 @@
  *
  * NAND support by Christian Gan <cgan@iders.ca>
  *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ *
  */
 
-#ifndef __UBOOT__
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/sched.h>
 #include <linux/types.h>
 #include <linux/backing-dev.h>
-#include <asm/div64.h>
-#else
-#include <div64.h>
-#include <linux/compat.h>
-#endif
 
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/concat.h>
 
-#include <ubi_uboot.h>
+#include <asm/div64.h>
 
 /*
  * Our storage structure:
@@ -64,10 +71,6 @@ concat_read(struct mtd_info *mtd, loff_t from, size_t len,
 	struct mtd_concat *concat = CONCAT(mtd);
 	int ret = 0, err;
 	int i;
-
-#ifdef __UBOOT__
-	*retlen = 0;
-#endif
 
 	for (i = 0; i < concat->num_subdev; i++) {
 		struct mtd_info *subdev = concat->subdev[i];
@@ -121,10 +124,6 @@ concat_write(struct mtd_info *mtd, loff_t to, size_t len,
 	int err = -EINVAL;
 	int i;
 
-#ifdef __UBOOT__
-	*retlen = 0;
-#endif
-
 	for (i = 0; i < concat->num_subdev; i++) {
 		struct mtd_info *subdev = concat->subdev[i];
 		size_t size, retsize;
@@ -155,7 +154,6 @@ concat_write(struct mtd_info *mtd, loff_t to, size_t len,
 	return err;
 }
 
-#ifndef __UBOOT__
 static int
 concat_writev(struct mtd_info *mtd, const struct kvec *vecs,
 		unsigned long count, loff_t to, size_t * retlen)
@@ -230,7 +228,6 @@ concat_writev(struct mtd_info *mtd, const struct kvec *vecs,
 	kfree(vecs_copy);
 	return err;
 }
-#endif
 
 static int
 concat_read_oob(struct mtd_info *mtd, loff_t from, struct mtd_oob_ops *ops)
@@ -314,7 +311,8 @@ concat_write_oob(struct mtd_info *mtd, loff_t to, struct mtd_oob_ops *ops)
 			devops.len = subdev->size - to;
 
 		err = mtd_write_oob(subdev, to, &devops);
-		ops->retlen += devops.oobretlen;
+		ops->retlen += devops.retlen;
+		ops->oobretlen += devops.oobretlen;
 		if (err)
 			return err;
 
@@ -337,10 +335,7 @@ concat_write_oob(struct mtd_info *mtd, loff_t to, struct mtd_oob_ops *ops)
 
 static void concat_erase_callback(struct erase_info *instr)
 {
-	/* Nothing to do here in U-Boot */
-#ifndef __UBOOT__
 	wake_up((wait_queue_head_t *) instr->priv);
-#endif
 }
 
 static int concat_dev_erase(struct mtd_info *mtd, struct erase_info *erase)
@@ -579,7 +574,6 @@ static void concat_sync(struct mtd_info *mtd)
 	}
 }
 
-#ifndef __UBOOT__
 static int concat_suspend(struct mtd_info *mtd)
 {
 	struct mtd_concat *concat = CONCAT(mtd);
@@ -603,7 +597,6 @@ static void concat_resume(struct mtd_info *mtd)
 		mtd_resume(subdev);
 	}
 }
-#endif
 
 static int concat_block_isbad(struct mtd_info *mtd, loff_t ofs)
 {
@@ -684,11 +677,7 @@ static unsigned long concat_get_unmapped_area(struct mtd_info *mtd,
  */
 struct mtd_info *mtd_concat_create(struct mtd_info *subdev[],	/* subdevices to concatenate */
 				   int num_devs,	/* number of subdevices      */
-#ifndef __UBOOT__
 				   const char *name)
-#else
-				   char *name)
-#endif
 {				/* name for the new device   */
 	int i;
 	size_t size;
@@ -697,10 +686,10 @@ struct mtd_info *mtd_concat_create(struct mtd_info *subdev[],	/* subdevices to c
 	int num_erase_region;
 	int max_writebufsize = 0;
 
-	debug("Concatenating MTD devices:\n");
+	printk(KERN_NOTICE "Concatenating MTD devices:\n");
 	for (i = 0; i < num_devs; i++)
 		printk(KERN_NOTICE "(%d): \"%s\"\n", i, subdev[i]->name);
-	debug("into device \"%s\"\n", name);
+	printk(KERN_NOTICE "into device \"%s\"\n", name);
 
 	/* allocate the device structure */
 	size = SIZEOF_STRUCT_MTD_CONCAT(num_devs);
@@ -731,10 +720,8 @@ struct mtd_info *mtd_concat_create(struct mtd_info *subdev[],	/* subdevices to c
 	concat->mtd.subpage_sft = subdev[0]->subpage_sft;
 	concat->mtd.oobsize = subdev[0]->oobsize;
 	concat->mtd.oobavail = subdev[0]->oobavail;
-#ifndef __UBOOT__
 	if (subdev[0]->_writev)
 		concat->mtd._writev = concat_writev;
-#endif
 	if (subdev[0]->_read_oob)
 		concat->mtd._read_oob = concat_read_oob;
 	if (subdev[0]->_write_oob)
@@ -745,10 +732,6 @@ struct mtd_info *mtd_concat_create(struct mtd_info *subdev[],	/* subdevices to c
 		concat->mtd._block_markbad = concat_block_markbad;
 
 	concat->mtd.ecc_stats.badblocks = subdev[0]->ecc_stats.badblocks;
-
-#ifndef __UBOOT__
-	concat->mtd.backing_dev_info = subdev[0]->backing_dev_info;
-#endif
 
 	concat->subdev[0] = subdev[0];
 
@@ -777,16 +760,6 @@ struct mtd_info *mtd_concat_create(struct mtd_info *subdev[],	/* subdevices to c
 				    subdev[i]->flags & MTD_WRITEABLE;
 		}
 
-#ifndef __UBOOT__
-		/* only permit direct mapping if the BDIs are all the same
-		 * - copy-mapping is still permitted
-		 */
-		if (concat->mtd.backing_dev_info !=
-		    subdev[i]->backing_dev_info)
-			concat->mtd.backing_dev_info =
-				&default_backing_dev_info;
-#endif
-
 		concat->mtd.size += subdev[i]->size;
 		concat->mtd.ecc_stats.badblocks +=
 			subdev[i]->ecc_stats.badblocks;
@@ -804,7 +777,7 @@ struct mtd_info *mtd_concat_create(struct mtd_info *subdev[],	/* subdevices to c
 
 	}
 
-	concat->mtd.ecclayout = subdev[0]->ecclayout;
+	mtd_set_ooblayout(&concat->mtd, subdev[0]->ooblayout);
 
 	concat->num_subdev = num_devs;
 	concat->mtd.name = name;
@@ -815,10 +788,8 @@ struct mtd_info *mtd_concat_create(struct mtd_info *subdev[],	/* subdevices to c
 	concat->mtd._sync = concat_sync;
 	concat->mtd._lock = concat_lock;
 	concat->mtd._unlock = concat_unlock;
-#ifndef __UBOOT__
 	concat->mtd._suspend = concat_suspend;
 	concat->mtd._resume = concat_resume;
-#endif
 	concat->mtd._get_unmapped_area = concat_get_unmapped_area;
 
 	/*

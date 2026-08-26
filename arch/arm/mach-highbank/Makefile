@@ -1,6 +1,6 @@
-# SPDX-License-Identifier: GPL-2.0+
-#
-# (C) Copyright 2000-2006
-# Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+obj-y					:= highbank.o system.o smc.o
 
-obj-y	:= timer.o
+plus_sec := $(call as-instr,.arch_extension sec,+sec)
+AFLAGS_smc.o				:=-Wa,-march=armv7-a$(plus_sec)
+
+obj-$(CONFIG_PM_SLEEP)			+= pm.o

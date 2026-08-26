@@ -1,8 +1,16 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2012 Linutronix GmbH
  * Copyright (c) 2014 sigma star gmbh
  * Author: Richard Weinberger <richard@nod.at>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See
+ * the GNU General Public License for more details.
  *
  */
 
@@ -10,15 +18,9 @@
  * update_fastmap_work_fn - calls ubi_update_fastmap from a work queue
  * @wrk: the work description object
  */
-#ifndef __UBOOT__
 static void update_fastmap_work_fn(struct work_struct *wrk)
-#else
-void update_fastmap_work_fn(struct ubi_device *ubi)
-#endif
 {
-#ifndef __UBOOT__
 	struct ubi_device *ubi = container_of(wrk, struct ubi_device, fm_work);
-#endif
 
 	ubi_update_fastmap(ubi);
 	spin_lock(&ubi->wl_lock);
@@ -260,8 +262,9 @@ static struct ubi_wl_entry *get_peb_for_wl(struct ubi_device *ubi)
 	struct ubi_fm_pool *pool = &ubi->fm_wl_pool;
 	int pnum;
 
+	ubi_assert(rwsem_is_locked(&ubi->fm_eba_sem));
+
 	if (pool->used == pool->size) {
-#ifndef __UBOOT__
 		/* We cannot update the fastmap here because this
 		 * function is called in atomic context.
 		 * Let's fail here and refill/update it as soon as possible. */
@@ -270,12 +273,6 @@ static struct ubi_wl_entry *get_peb_for_wl(struct ubi_device *ubi)
 			schedule_work(&ubi->fm_work);
 		}
 		return NULL;
-#else
-		/*
-		 * No work queues in U-Boot, we must do this immediately
-		 */
-		update_fastmap_work_fn(ubi);
-#endif
 	}
 
 	pnum = pool->pebs[pool->used++];
@@ -308,7 +305,7 @@ int ubi_ensure_anchor_pebs(struct ubi_device *ubi)
 
 	wrk->anchor = 1;
 	wrk->func = &wear_leveling_worker;
-	schedule_ubi_work(ubi, wrk);
+	__schedule_ubi_work(ubi, wrk);
 	return 0;
 }
 
@@ -349,7 +346,7 @@ int ubi_wl_put_fm_peb(struct ubi_device *ubi, struct ubi_wl_entry *fm_e,
 	spin_unlock(&ubi->wl_lock);
 
 	vol_id = lnum ? UBI_FM_DATA_VOLUME_ID : UBI_FM_SB_VOLUME_ID;
-	return schedule_erase(ubi, e, vol_id, lnum, torture);
+	return schedule_erase(ubi, e, vol_id, lnum, torture, true);
 }
 
 /**

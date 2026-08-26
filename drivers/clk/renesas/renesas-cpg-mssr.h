@@ -1,44 +1,25 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
- * Renesas RCar Gen3 CPG MSSR driver
+ * Renesas Clock Pulse Generator / Module Standby and Software Reset
  *
- * Copyright (C) 2017-2018 Marek Vasut <marek.vasut@gmail.com>
+ * Copyright (C) 2015 Glider bvba
  *
- * Based on the following driver from Linux kernel:
- * r8a7796 Clock Pulse Generator / Module Standby and Software Reset
- *
- * Copyright (C) 2016 Glider bvba
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2 of the License.
  */
 
-#ifndef __DRIVERS_CLK_RENESAS_CPG_MSSR__
-#define __DRIVERS_CLK_RENESAS_CPG_MSSR__
+#ifndef __CLK_RENESAS_CPG_MSSR_H__
+#define __CLK_RENESAS_CPG_MSSR_H__
 
-struct cpg_mssr_info {
-	const struct cpg_core_clk	*core_clk;
-	unsigned int			core_clk_size;
-	const struct mssr_mod_clk	*mod_clk;
-	unsigned int			mod_clk_size;
-	const struct mstp_stop_table	*mstp_table;
-	unsigned int			mstp_table_size;
-	const char			*reset_node;
-	const char			*extalr_node;
-	const char			*extal_usb_node;
-	unsigned int			mod_clk_base;
-	unsigned int			clk_extal_id;
-	unsigned int			clk_extalr_id;
-	unsigned int			clk_extal_usb_id;
-	unsigned int			pll0_div;
-	const void			*(*get_pll_config)(const u32 cpg_mode);
-};
+    /*
+     * Definitions of CPG Core Clocks
+     *
+     * These include:
+     *   - Clock outputs exported to DT
+     *   - External input clocks
+     *   - Internal CPG clocks
+     */
 
-/*
- * Definitions of CPG Core Clocks
- *
- * These include:
- *   - Clock outputs exported to DT
- *   - External input clocks
- *   - Internal CPG clocks
- */
 struct cpg_core_clk {
 	/* Common */
 	const char *name;
@@ -57,7 +38,6 @@ enum clk_types {
 	CLK_TYPE_FF,		/* Fixed Factor Clock */
 	CLK_TYPE_DIV6P1,	/* DIV6 Clock with 1 parent clock */
 	CLK_TYPE_DIV6_RO,	/* DIV6 Clock read only with extra divisor */
-	CLK_TYPE_FR,		/* Fixed Rate Clock */
 
 	/* Custom definitions start here */
 	CLK_TYPE_CUSTOM,
@@ -76,12 +56,11 @@ enum clk_types {
 	DEF_BASE(_name, _id, CLK_TYPE_DIV6P1, _parent, .offset = _offset)
 #define DEF_DIV6_RO(_name, _id, _parent, _offset, _div)	\
 	DEF_BASE(_name, _id, CLK_TYPE_DIV6_RO, _parent, .offset = _offset, .div = _div, .mult = 1)
-#define DEF_RATE(_name, _id, _rate)	\
-	DEF_TYPE(_name, _id, CLK_TYPE_FR, .mult = _rate)
 
-/*
- * Definitions of Module Clocks
- */
+    /*
+     * Definitions of Module Clocks
+     */
+
 struct mssr_mod_clk {
 	const char *name;
 	unsigned int id;
@@ -96,24 +75,90 @@ struct mssr_mod_clk {
 #define DEF_MOD(_name, _mod, _parent...)	\
 	{ .name = _name, .id = MOD_CLK_ID(_mod), .parent = _parent }
 
-struct mstp_stop_table {
-	u32	sdis;
-	u32	sen;
-	u32	rdis;
-	u32	ren;
+
+struct device_node;
+
+    /**
+     * SoC-specific CPG/MSSR Description
+     *
+     * @core_clks: Array of Core Clock definitions
+     * @num_core_clks: Number of entries in core_clks[]
+     * @last_dt_core_clk: ID of the last Core Clock exported to DT
+     * @num_total_core_clks: Total number of Core Clocks (exported + internal)
+     *
+     * @mod_clks: Array of Module Clock definitions
+     * @num_mod_clks: Number of entries in mod_clks[]
+     * @num_hw_mod_clks: Number of Module Clocks supported by the hardware
+     *
+     * @crit_mod_clks: Array with Module Clock IDs of critical clocks that
+     *                 should not be disabled without a knowledgeable driver
+     * @num_crit_mod_clks: Number of entries in crit_mod_clks[]
+     *
+     * @core_pm_clks: Array with IDs of Core Clocks that are suitable for Power
+     *                Management, in addition to Module Clocks
+     * @num_core_pm_clks: Number of entries in core_pm_clks[]
+     *
+     * @init: Optional callback to perform SoC-specific initialization
+     * @cpg_clk_register: Optional callback to handle special Core Clock types
+     */
+
+struct cpg_mssr_info {
+	/* Core Clocks */
+	const struct cpg_core_clk *core_clks;
+	unsigned int num_core_clks;
+	unsigned int last_dt_core_clk;
+	unsigned int num_total_core_clks;
+
+	/* Module Clocks */
+	const struct mssr_mod_clk *mod_clks;
+	unsigned int num_mod_clks;
+	unsigned int num_hw_mod_clks;
+
+	/* Critical Module Clocks that should not be disabled */
+	const unsigned int *crit_mod_clks;
+	unsigned int num_crit_mod_clks;
+
+	/* Core Clocks suitable for PM, in addition to the Module Clocks */
+	const unsigned int *core_pm_clks;
+	unsigned int num_core_pm_clks;
+
+	/* Callbacks */
+	int (*init)(struct device *dev);
+	struct clk *(*cpg_clk_register)(struct device *dev,
+					const struct cpg_core_clk *core,
+					const struct cpg_mssr_info *info,
+					struct clk **clks, void __iomem *base);
 };
 
-#define TSTR0		0x04
-#define TSTR0_STR0	BIT(0)
+extern const struct cpg_mssr_info r8a7743_cpg_mssr_info;
+extern const struct cpg_mssr_info r8a7745_cpg_mssr_info;
+extern const struct cpg_mssr_info r8a7790_cpg_mssr_info;
+extern const struct cpg_mssr_info r8a7791_cpg_mssr_info;
+extern const struct cpg_mssr_info r8a7792_cpg_mssr_info;
+extern const struct cpg_mssr_info r8a7794_cpg_mssr_info;
+extern const struct cpg_mssr_info r8a7795_cpg_mssr_info;
+extern const struct cpg_mssr_info r8a7796_cpg_mssr_info;
+extern const struct cpg_mssr_info r8a77995_cpg_mssr_info;
 
-bool renesas_clk_is_mod(struct clk *clk);
-int renesas_clk_get_mod(struct clk *clk, struct cpg_mssr_info *info,
-			const struct mssr_mod_clk **mssr);
-int renesas_clk_get_core(struct clk *clk, struct cpg_mssr_info *info,
-			 const struct cpg_core_clk **core);
-int renesas_clk_get_parent(struct clk *clk, struct cpg_mssr_info *info,
-			   struct clk *parent);
-int renesas_clk_endisable(struct clk *clk, void __iomem *base, bool enable);
-int renesas_clk_remove(void __iomem *base, struct cpg_mssr_info *info);
 
-#endif /* __DRIVERS_CLK_RENESAS_CPG_MSSR__ */
+    /*
+     * Helpers for fixing up clock tables depending on SoC revision
+     */
+
+struct mssr_mod_reparent {
+	unsigned int clk, parent;
+};
+
+
+extern void cpg_core_nullify_range(struct cpg_core_clk *core_clks,
+				   unsigned int num_core_clks,
+				   unsigned int first_clk,
+				   unsigned int last_clk);
+extern void mssr_mod_nullify(struct mssr_mod_clk *mod_clks,
+			     unsigned int num_mod_clks,
+			     const unsigned int *clks, unsigned int n);
+extern void mssr_mod_reparent(struct mssr_mod_clk *mod_clks,
+			      unsigned int num_mod_clks,
+			      const struct mssr_mod_reparent *clks,
+			      unsigned int n);
+#endif

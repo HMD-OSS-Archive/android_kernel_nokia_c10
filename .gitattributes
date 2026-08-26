@@ -1,5 +1,2 @@
-# Declare files that always have LF line endings on checkout
-* text eol=lf
-# Denote all files that are truly binary and should not be modified
-*.bmp binary
-*.ttf binary
+*.c   diff=cpp
+*.h   diff=cpp

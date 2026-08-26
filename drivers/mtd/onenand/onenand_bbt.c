@@ -1,26 +1,22 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  linux/drivers/mtd/onenand/onenand_bbt.c
  *
  *  Bad Block Table support for the OneNAND driver
  *
- *  Copyright(c) 2005-2008 Samsung Electronics
+ *  Copyright(c) 2005 Samsung Electronics
  *  Kyungmin Park <kyungmin.park@samsung.com>
+ *
+ *  Derived from nand_bbt.c
  *
  *  TODO:
  *    Split BBT core and chip specific BBT.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
 
-#include <common.h>
-#include <linux/compat.h>
+#include <linux/slab.h>
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/onenand.h>
-#include <malloc.h>
-
-#include <linux/errno.h>
+#include <linux/export.h>
 
 /**
  * check_short_pattern - [GENERIC] check if a pattern is in the buffer
@@ -33,9 +29,9 @@
  * tables and good / bad block identifiers. Same as check_pattern, but
  * no optional empty check and the pattern is expected to start
  * at offset 0.
+ *
  */
-static int check_short_pattern(uint8_t * buf, int len, int paglen,
-			       struct nand_bbt_descr *td)
+static int check_short_pattern(uint8_t *buf, int len, int paglen, struct nand_bbt_descr *td)
 {
 	int i;
 	uint8_t *p = buf;
@@ -45,7 +41,7 @@ static int check_short_pattern(uint8_t * buf, int len, int paglen,
 		if (p[i] != td->pattern[i])
 			return -1;
 	}
-	return 0;
+        return 0;
 }
 
 /**
@@ -59,8 +55,7 @@ static int check_short_pattern(uint8_t * buf, int len, int paglen,
  * Create a bad block table by scanning the device
  * for the given good/bad block identify pattern
  */
-static int create_bbt(struct mtd_info *mtd, uint8_t * buf,
-		      struct nand_bbt_descr *bd, int chip)
+static int create_bbt(struct mtd_info *mtd, uint8_t *buf, struct nand_bbt_descr *bd, int chip)
 {
 	struct onenand_chip *this = mtd->priv;
 	struct bbm_info *bbm = this->bbm;
@@ -73,7 +68,7 @@ static int create_bbt(struct mtd_info *mtd, uint8_t * buf,
 
 	printk(KERN_INFO "Scanning device for bad blocks\n");
 
-	len = 1;
+	len = 2;
 
 	/* We need only read few bytes from the OOB area */
 	scanlen = ooblen = 0;
@@ -92,26 +87,25 @@ static int create_bbt(struct mtd_info *mtd, uint8_t * buf,
 	ops.oobbuf = buf;
 	ops.len = ops.ooboffs = ops.retlen = ops.oobretlen = 0;
 
-	for (i = startblock; i < numblocks;) {
+	for (i = startblock; i < numblocks; ) {
 		int ret;
 
 		for (j = 0; j < len; j++) {
 			/* No need to read pages fully,
 			 * just read required OOB bytes */
 			ret = onenand_bbt_read_oob(mtd,
-					     from + j * mtd->writesize +
-					     bd->offs, &ops);
+				from + j * this->writesize + bd->offs, &ops);
 
 			/* If it is a initial bad block, just ignore it */
 			if (ret == ONENAND_BBT_READ_FATAL_ERROR)
 				return -EIO;
 
-			if (ret || check_short_pattern
-			    (&buf[j * scanlen], scanlen, mtd->writesize, bd)) {
+			if (ret || check_short_pattern(&buf[j * scanlen],
+					       scanlen, this->writesize, bd)) {
 				bbm->bbt[i >> 3] |= 0x03 << (i & 0x6);
-				printk(KERN_WARNING
-				       "Bad eraseblock %d at 0x%08x\n", i >> 1,
-				       (unsigned int)from);
+				printk(KERN_INFO "OneNAND eraseblock %d is an "
+					"initial bad block\n", i >> 1);
+				mtd->ecc_stats.badblocks++;
 				break;
 			}
 		}
@@ -127,6 +121,7 @@ static int create_bbt(struct mtd_info *mtd, uint8_t * buf,
 	return 0;
 }
 
+
 /**
  * onenand_memory_bbt - [GENERIC] create a memory based bad block table
  * @param mtd		MTD device structure
@@ -135,12 +130,11 @@ static int create_bbt(struct mtd_info *mtd, uint8_t * buf,
  * The function creates a memory based bbt by scanning the device
  * for manufacturer / software marked good / bad blocks
  */
-static inline int onenand_memory_bbt(struct mtd_info *mtd,
-				     struct nand_bbt_descr *bd)
+static inline int onenand_memory_bbt (struct mtd_info *mtd, struct nand_bbt_descr *bd)
 {
-	unsigned char data_buf[MAX_ONENAND_PAGESIZE];
+	struct onenand_chip *this = mtd->priv;
 
-	return create_bbt(mtd, data_buf, bd, -1);
+	return create_bbt(mtd, this->page_buf, bd, -1);
 }
 
 /**
@@ -161,15 +155,12 @@ static int onenand_isbad_bbt(struct mtd_info *mtd, loff_t offs, int allowbbt)
 	res = (bbm->bbt[block >> 3] >> (block & 0x06)) & 0x03;
 
 	pr_debug("onenand_isbad_bbt: bbt info for offs 0x%08x: (block %d) 0x%02x\n",
-		 (unsigned int)offs, block >> 1, res);
+		(unsigned int) offs, block >> 1, res);
 
-	switch ((int)res) {
-	case 0x00:
-		return 0;
-	case 0x01:
-		return 1;
-	case 0x02:
-		return allowbbt ? 0 : 1;
+	switch ((int) res) {
+	case 0x00:	return 0;
+	case 0x01:	return 1;
+	case 0x02:	return allowbbt ? 0 : 1;
 	}
 
 	return 1;
@@ -185,23 +176,21 @@ static int onenand_isbad_bbt(struct mtd_info *mtd, loff_t offs, int allowbbt)
  * marked good / bad blocks and writes the bad block table(s) to
  * the selected place.
  *
- * The bad block table memory is allocated here. It must be freed
- * by calling the onenand_free_bbt function.
+ * The bad block table memory is allocated here. It is freed
+ * by the onenand_release function.
  *
  */
-int onenand_scan_bbt(struct mtd_info *mtd, struct nand_bbt_descr *bd)
+static int onenand_scan_bbt(struct mtd_info *mtd, struct nand_bbt_descr *bd)
 {
 	struct onenand_chip *this = mtd->priv;
 	struct bbm_info *bbm = this->bbm;
 	int len, ret = 0;
 
 	len = this->chipsize >> (this->erase_shift + 2);
-	/* Allocate memory (2bit per block) */
-	bbm->bbt = malloc(len);
+	/* Allocate memory (2bit per block) and clear the memory bad block table */
+	bbm->bbt = kzalloc(len, GFP_KERNEL);
 	if (!bbm->bbt)
 		return -ENOMEM;
-	/* Clear the memory bad block table */
-	memset(bbm->bbt, 0x00, len);
 
 	/* Set the bad block position */
 	bbm->badblockpos = ONENAND_BADBLOCK_POS;
@@ -214,9 +203,8 @@ int onenand_scan_bbt(struct mtd_info *mtd, struct nand_bbt_descr *bd)
 
 	/* Scan the device to build a memory based bad block table */
 	if ((ret = onenand_memory_bbt(mtd, bd))) {
-		printk(KERN_ERR
-		       "onenand_scan_bbt: Can't scan flash and build the RAM-based BBT\n");
-		free(bbm->bbt);
+		printk(KERN_ERR "onenand_scan_bbt: Can't scan flash and build the RAM-based BBT\n");
+		kfree(bbm->bbt);
 		bbm->bbt = NULL;
 	}
 
@@ -248,13 +236,11 @@ int onenand_default_bbt(struct mtd_info *mtd)
 	struct onenand_chip *this = mtd->priv;
 	struct bbm_info *bbm;
 
-	this->bbm = malloc(sizeof(struct bbm_info));
+	this->bbm = kzalloc(sizeof(struct bbm_info), GFP_KERNEL);
 	if (!this->bbm)
 		return -ENOMEM;
 
 	bbm = this->bbm;
-
-	memset(bbm, 0, sizeof(struct bbm_info));
 
 	/* 1KB page has same configuration as 2KB page */
 	if (!bbm->badblock_pattern)

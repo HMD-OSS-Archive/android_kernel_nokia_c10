@@ -1,6 +1,19 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright (c) International Business Machines Corp., 2006
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See
+ * the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
  *
  * Author: Artem Bityutskiy (Битюцкий Артём)
  */
@@ -12,13 +25,8 @@ void ubi_dump_flash(struct ubi_device *ubi, int pnum, int offset, int len);
 void ubi_dump_ec_hdr(const struct ubi_ec_hdr *ec_hdr);
 void ubi_dump_vid_hdr(const struct ubi_vid_hdr *vid_hdr);
 
-#ifndef __UBOOT__
 #include <linux/random.h>
-#endif
 
-#include <hexdump.h>
-
-#ifndef __UBOOT__
 #define ubi_assert(expr)  do {                                               \
 	if (unlikely(!(expr))) {                                             \
 		pr_crit("UBI assert failed in %s at %u (pid %d)\n",          \
@@ -26,18 +34,9 @@ void ubi_dump_vid_hdr(const struct ubi_vid_hdr *vid_hdr);
 		dump_stack();                                                \
 	}                                                                    \
 } while (0)
-#else
-#define ubi_assert(expr)  do {                                               \
-	if (unlikely(!(expr))) {                                             \
-		pr_debug("UBI assert failed in %s at %u\n",                  \
-		       __func__, __LINE__);                                  \
-		dump_stack();                                                \
-	}                                                                    \
-} while (0)
-#endif
 
-#define ubi_dbg_print_hex_dump(ps, pt, r, g, b, len, a)                      \
-		print_hex_dump(ps, pt, r, g, b, len, a)
+#define ubi_dbg_print_hex_dump(l, ps, pt, r, g, b, len, a)                   \
+		print_hex_dump(l, ps, pt, r, g, b, len, a)
 
 #define ubi_dbg_msg(type, fmt, ...) \
 	pr_debug("UBI DBG " type " (pid %d): " fmt "\n", current->pid,       \

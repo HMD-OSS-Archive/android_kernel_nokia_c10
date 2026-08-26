@@ -1,8 +1,20 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * This file is part of UBIFS.
  *
  * Copyright (C) 2006-2008 Nokia Corporation.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published by
+ * the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  *
  * Authors: Adrian Hunter
  *          Artem Bityutskiy (Битюцкий Артём)
@@ -40,14 +52,12 @@
  * watermark are "good" LEBs from GC's point of few. The other LEBs are not so
  * good, and GC takes extra care when moving them.
  */
-#ifndef __UBOOT__
+
 #include <linux/slab.h>
 #include <linux/pagemap.h>
 #include <linux/list_sort.h>
-#endif
 #include "ubifs.h"
 
-#ifndef __UBOOT__
 /*
  * GC may need to move more than one LEB to make progress. The below constants
  * define "soft" and "hard" limits on the number of LEBs the garbage collector
@@ -90,10 +100,6 @@ static int switch_gc_head(struct ubifs_info *c)
 	if (err)
 		return err;
 
-	err = ubifs_wbuf_sync_nolock(wbuf);
-	if (err)
-		return err;
-
 	err = ubifs_add_bud_to_log(c, GCHD, gc_lnum, 0);
 	if (err)
 		return err;
@@ -107,7 +113,7 @@ static int switch_gc_head(struct ubifs_info *c)
  * data_nodes_cmp - compare 2 data nodes.
  * @priv: UBIFS file-system description object
  * @a: first data node
- * @a: second data node
+ * @b: second data node
  *
  * This function compares data nodes @a and @b. Returns %1 if @a has greater
  * inode or block number, and %-1 otherwise.
@@ -840,10 +846,6 @@ int ubifs_gc_start_commit(struct ubifs_info *c)
 	 */
 	while (1) {
 		lp = ubifs_fast_find_freeable(c);
-		if (IS_ERR(lp)) {
-			err = PTR_ERR(lp);
-			goto out;
-		}
 		if (!lp)
 			break;
 		ubifs_assert(!(lp->flags & LPROPS_TAKEN));
@@ -930,7 +932,7 @@ out:
 	mutex_unlock(&wbuf->io_mutex);
 	return err;
 }
-#endif
+
 /**
  * ubifs_destroy_idx_gc - destroy idx_gc list.
  * @c: UBIFS file-system description object
@@ -951,7 +953,7 @@ void ubifs_destroy_idx_gc(struct ubifs_info *c)
 		kfree(idx_gc);
 	}
 }
-#ifndef __UBOOT__
+
 /**
  * ubifs_get_idx_gc_leb - get a LEB from GC'd index LEB list.
  * @c: UBIFS file-system description object
@@ -972,4 +974,3 @@ int ubifs_get_idx_gc_leb(struct ubifs_info *c)
 	kfree(idx_gc);
 	return lnum;
 }
-#endif

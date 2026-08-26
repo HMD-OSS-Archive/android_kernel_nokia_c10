@@ -1,24 +1,29 @@
-#ifndef __ASM_NIOS2_DMA_MAPPING_H
-#define __ASM_NIOS2_DMA_MAPPING_H
+/*
+ * Copyright (C) 2011 Tobias Klauser <tklauser@distanz.ch>
+ * Copyright (C) 2009 Wind River Systems Inc
+ *
+ * This file is subject to the terms and conditions of the GNU General
+ * Public License.  See the file COPYING in the main directory of this
+ * archive for more details.
+ */
 
-#include <memalign.h>
-#include <asm/io.h>
+#ifndef _ASM_NIOS2_DMA_MAPPING_H
+#define _ASM_NIOS2_DMA_MAPPING_H
+
+extern const struct dma_map_ops nios2_dma_ops;
+
+static inline const struct dma_map_ops *get_arch_dma_ops(struct bus_type *bus)
+{
+	return &nios2_dma_ops;
+}
 
 /*
- * dma_alloc_coherent() return cache-line aligned allocation which is mapped
- * to uncached io region.
+ * dma_alloc_attrs() always returns non-cacheable memory, so there's no need to
+ * do any flushing here.
  */
-static inline void *dma_alloc_coherent(size_t len, unsigned long *handle)
+static inline void dma_cache_sync(struct device *dev, void *vaddr, size_t size,
+				  enum dma_data_direction direction)
 {
-	unsigned long addr = (unsigned long)malloc_cache_aligned(len);
-
-	if (!addr)
-		return NULL;
-
-	invalidate_dcache_range(addr, addr + len);
-	if (handle)
-		*handle = addr;
-
-	return map_physmem(addr, len, MAP_NOCACHE);
 }
-#endif /* __ASM_NIOS2_DMA_MAPPING_H */
+
+#endif /* _ASM_NIOS2_DMA_MAPPING_H */

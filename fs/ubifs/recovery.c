@@ -1,8 +1,20 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * This file is part of UBIFS.
  *
  * Copyright (C) 2006-2008 Nokia Corporation
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published by
+ * the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  *
  * Authors: Adrian Hunter
  *          Artem Bityutskiy (Битюцкий Артём)
@@ -35,13 +47,8 @@
  * refuses to mount.
  */
 
-#ifndef __UBOOT__
 #include <linux/crc32.h>
 #include <linux/slab.h>
-#include <u-boot/crc.h>
-#else
-#include <linux/err.h>
-#endif
 #include "ubifs.h"
 
 /**
@@ -337,14 +344,12 @@ int ubifs_recover_master_node(struct ubifs_info *c)
 		 *    dirty.
 		 */
 		c->mst_node->flags |= cpu_to_le32(UBIFS_MST_DIRTY);
-#ifndef __UBOOT__
 	} else {
 		/* Write the recovered master node */
 		c->max_sqnum = le64_to_cpu(mst->ch.sqnum) - 1;
 		err = write_rcvrd_mst_node(c, c->mst_node);
 		if (err)
 			goto out_free;
-#endif
 	}
 
 	vfree(buf2);
@@ -437,7 +442,6 @@ static void clean_buf(const struct ubifs_info *c, void **buf, int lnum,
 {
 	int empty_offs, pad_len;
 
-	lnum = lnum;
 	dbg_rcvry("cleaning corruption at %d:%d", lnum, *offs);
 
 	ubifs_assert(!(*offs & 7));
@@ -521,7 +525,6 @@ static int fix_unclean_leb(struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 		ucleb->lnum = lnum;
 		ucleb->endpt = endpt;
 		list_add_tail(&ucleb->list, &c->unclean_leb_list);
-#ifndef __UBOOT__
 	} else {
 		/* Write the fixed LEB back to flash */
 		int err;
@@ -555,7 +558,6 @@ static int fix_unclean_leb(struct ubifs_info *c, struct ubifs_scan_leb *sleb,
 			if (err)
 				return err;
 		}
-#endif
 	}
 	return 0;
 }
@@ -786,7 +788,7 @@ struct ubifs_scan_leb *ubifs_recover_leb(struct ubifs_info *c, int lnum,
 corrupted_rescan:
 	/* Re-scan the corrupted data with verbose messages */
 	ubifs_err(c, "corruption %d", ret);
-	ubifs_scan_a_node(c, buf, len, lnum, offs, 1);
+	ubifs_scan_a_node(c, buf, len, lnum, offs, 0);
 corrupted:
 	ubifs_scanned_corruption(c, lnum, offs, buf);
 	err = -EUCLEAN;
@@ -1099,7 +1101,6 @@ int ubifs_clean_lebs(struct ubifs_info *c, void *sbuf)
 	return 0;
 }
 
-#ifndef __UBOOT__
 /**
  * grab_empty_leb - grab an empty LEB to use as GC LEB and run commit.
  * @c: UBIFS file-system description object
@@ -1226,12 +1227,6 @@ int ubifs_rcvry_gc_commit(struct ubifs_info *c)
 	dbg_rcvry("allocated LEB %d for GC", lp.lnum);
 	return 0;
 }
-#else
-int ubifs_rcvry_gc_commit(struct ubifs_info *c)
-{
-	return 0;
-}
-#endif
 
 /**
  * struct size_entry - inode size information for recovery.
@@ -1335,8 +1330,7 @@ void ubifs_destroy_size_tree(struct ubifs_info *c)
 	struct size_entry *e, *n;
 
 	rbtree_postorder_for_each_entry_safe(e, n, &c->size_tree, rb) {
-		if (e->inode)
-			iput(e->inode);
+		iput(e->inode);
 		kfree(e);
 	}
 
@@ -1411,7 +1405,6 @@ int ubifs_recover_size_accum(struct ubifs_info *c, union ubifs_key *key,
 	return 0;
 }
 
-#ifndef __UBOOT__
 /**
  * fix_size_in_place - fix inode size in place on flash.
  * @c: UBIFS file-system description object
@@ -1467,7 +1460,6 @@ out:
 		   (unsigned long)e->inum, e->i_size, e->d_size, err);
 	return err;
 }
-#endif
 
 /**
  * ubifs_recover_size - recover inode size.
@@ -1534,15 +1526,12 @@ int ubifs_recover_size(struct ubifs_info *c)
 					continue;
 				}
 				iput(inode);
-#ifndef __UBOOT__
 			} else {
 				/* Fix the size in place */
 				err = fix_size_in_place(c, e);
 				if (err)
 					return err;
-				if (e->inode)
-					iput(e->inode);
-#endif
+				iput(e->inode);
 			}
 		}
 

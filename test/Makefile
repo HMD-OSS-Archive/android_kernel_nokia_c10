@@ -1,14 +1,7 @@
-# SPDX-License-Identifier: GPL-2.0+
-#
-# (C) Copyright 2012 The Chromium Authors
-
-obj-$(CONFIG_SANDBOX) += bloblist.o
-obj-$(CONFIG_UNIT_TEST) += cmd_ut.o
-obj-$(CONFIG_UNIT_TEST) += ut.o
-obj-$(CONFIG_SANDBOX) += command_ut.o
-obj-$(CONFIG_SANDBOX) += compression.o
-obj-$(CONFIG_SANDBOX) += print_ut.o
-obj-$(CONFIG_UT_TIME) += time_ut.o
-obj-$(CONFIG_UT_UNICODE) += unicode_ut.o
-obj-$(CONFIG_$(SPL_)LOG) += log/
-obj-$(CONFIG_UNIT_TEST) += lib/
+obj-$(CONFIG_TEST)		+= test.o mock.o common-mocks.o strerror.o \
+  string-stream.o test-stream.o test-executor.o try-catch.o
+obj-$(CONFIG_TEST_TEST)		+= \
+  test-mock.o mock-macro-test.o mock-test.o strerror-test.o \
+  string-stream-test.o test-stream-test.o test-test.o
+obj-$(CONFIG_TEST_DEATH_TEST)	+= test-death-test.o
+obj-$(CONFIG_EXAMPLE_TEST)	+= example-test.o

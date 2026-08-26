@@ -1,16 +1,19 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
 /* Asymmetric Public-key cryptography key type interface
  *
- * See Documentation/crypto/asymmetric-keys.txt
+ * See Documentation/security/asymmetric-keys.txt
  *
  * Copyright (C) 2012 Red Hat, Inc. All Rights Reserved.
  * Written by David Howells (dhowells@redhat.com)
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public Licence
+ * as published by the Free Software Foundation; either version
+ * 2 of the Licence, or (at your option) any later version.
  */
 
 #ifndef _KEYS_ASYMMETRIC_TYPE_H
 #define _KEYS_ASYMMETRIC_TYPE_H
 
-#ifndef __UBOOT__
 #include <linux/key-type.h>
 #include <linux/verification.h>
 
@@ -26,7 +29,6 @@ enum asymmetric_payload_bits {
 	asym_key_ids,		/* Pointer to an asymmetric_key_ids struct */
 	asym_auth		/* The key's authorisation (signature, parent key ID) */
 };
-#endif /* !__UBOOT__ */
 
 /*
  * Identifiers for an asymmetric key ID.  We have three ways of looking up a
@@ -68,7 +70,6 @@ extern struct asymmetric_key_id *asymmetric_key_generate_id(const void *val_1,
 							    size_t len_1,
 							    const void *val_2,
 							    size_t len_2);
-#ifndef __UBOOT__
 static inline
 const struct asymmetric_key_ids *asymmetric_key_ids(const struct key *key)
 {
@@ -79,7 +80,6 @@ extern struct key *find_asymmetric_key(struct key *keyring,
 				       const struct asymmetric_key_id *id_0,
 				       const struct asymmetric_key_id *id_1,
 				       bool partial);
-#endif
 
 /*
  * The payload is at the discretion of the subtype.

@@ -1,5 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /*
+ * This file is subject to the terms and conditions of the GNU General Public
+ * License.  See the file "COPYING" in the main directory of this archive
+ * for more details.
+ *
  * Copyright (C) 1994 - 1999, 2000, 03, 04 Ralf Baechle
  * Copyright (C) 2000, 2002  Maciej W. Rozycki
  * Copyright (C) 1990, 1999, 2000 Silicon Graphics, Inc.
@@ -8,6 +11,8 @@
 #define _ASM_MACH_GENERIC_SPACES_H
 
 #include <linux/const.h>
+
+#include <asm/mipsregs.h>
 
 /*
  * This gives the physical RAM offset.
@@ -49,11 +54,7 @@
 #ifdef CONFIG_64BIT
 
 #ifndef CAC_BASE
-#ifdef CONFIG_DMA_NONCOHERENT
-#define CAC_BASE		_AC(0x9800000000000000, UL)
-#else
-#define CAC_BASE		_AC(0xa800000000000000, UL)
-#endif
+#define CAC_BASE	PHYS_TO_XKPHYS(read_c0_config() & CONF_CM_CMASK, 0)
 #endif
 
 #ifndef IO_BASE

@@ -1,22 +1,29 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2017, Impinj, Inc.
+ *
+ * i.MX7 System Reset Controller (SRC) driver
+ *
+ * Author: Andrey Smirnov <andrew.smirnov@gmail.com>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2 of the License.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
  */
 
-#include <asm/io.h>
-#include <common.h>
-#include <dm.h>
+#include <linux/mfd/syscon.h>
+#include <linux/platform_device.h>
+#include <linux/reset-controller.h>
+#include <linux/regmap.h>
 #include <dt-bindings/reset/imx7-reset.h>
-#include <dt-bindings/reset/imx8mq-reset.h>
-#include <reset-uclass.h>
 
-struct imx7_reset_priv {
-	void __iomem *base;
-	struct reset_ops ops;
-};
-
-struct imx7_src_signal {
-	unsigned int offset, bit;
+struct imx7_src {
+	struct reset_controller_dev rcdev;
+	struct regmap *regmap;
 };
 
 enum imx7_src_registers {
@@ -31,10 +38,14 @@ enum imx7_src_registers {
 	SRC_DDRC_RCR		= 0x1000,
 };
 
+struct imx7_src_signal {
+	unsigned int offset, bit;
+};
+
 static const struct imx7_src_signal imx7_src_signals[IMX7_RESET_NUM] = {
-	[IMX7_RESET_A7_CORE_POR_RESET0]	= { SRC_A7RCR0, BIT(0) },
-	[IMX7_RESET_A7_CORE_POR_RESET1]	= { SRC_A7RCR0, BIT(1) },
-	[IMX7_RESET_A7_CORE_RESET0]	= { SRC_A7RCR0, BIT(4) },
+	[IMX7_RESET_A7_CORE_POR_RESET0] = { SRC_A7RCR0, BIT(0) },
+	[IMX7_RESET_A7_CORE_POR_RESET1] = { SRC_A7RCR0, BIT(1) },
+	[IMX7_RESET_A7_CORE_RESET0]     = { SRC_A7RCR0, BIT(4) },
 	[IMX7_RESET_A7_CORE_RESET1]	= { SRC_A7RCR0, BIT(5) },
 	[IMX7_RESET_A7_DBG_RESET0]	= { SRC_A7RCR0, BIT(8) },
 	[IMX7_RESET_A7_DBG_RESET1]	= { SRC_A7RCR0, BIT(9) },
@@ -55,258 +66,93 @@ static const struct imx7_src_signal imx7_src_signals[IMX7_RESET_NUM] = {
 	[IMX7_RESET_PCIEPHY]		= { SRC_PCIEPHY_RCR, BIT(2) | BIT(1) },
 	[IMX7_RESET_PCIEPHY_PERST]	= { SRC_PCIEPHY_RCR, BIT(3) },
 	[IMX7_RESET_PCIE_CTRL_APPS_EN]	= { SRC_PCIEPHY_RCR, BIT(6) },
-	[IMX7_RESET_PCIE_CTRL_APPS_TURNOFF] = { SRC_PCIEPHY_RCR, BIT(11) },
 	[IMX7_RESET_DDRC_PRST]		= { SRC_DDRC_RCR, BIT(0) },
 	[IMX7_RESET_DDRC_CORE_RST]	= { SRC_DDRC_RCR, BIT(1) },
 };
 
-static int imx7_reset_deassert_imx7(struct reset_ctl *rst)
+static struct imx7_src *to_imx7_src(struct reset_controller_dev *rcdev)
 {
-	struct imx7_reset_priv *priv = dev_get_priv(rst->dev);
-	const struct imx7_src_signal *sig = imx7_src_signals;
-	u32 val;
+	return container_of(rcdev, struct imx7_src, rcdev);
+}
 
-	if (rst->id >= IMX7_RESET_NUM)
-		return -EINVAL;
+static int imx7_reset_set(struct reset_controller_dev *rcdev,
+			  unsigned long id, bool assert)
+{
+	struct imx7_src *imx7src = to_imx7_src(rcdev);
+	const struct imx7_src_signal *signal = &imx7_src_signals[id];
+	unsigned int value = assert ? signal->bit : 0;
 
-	if (rst->id == IMX7_RESET_PCIEPHY) {
+	switch (id) {
+	case IMX7_RESET_PCIEPHY:
 		/*
 		 * wait for more than 10us to release phy g_rst and
 		 * btnrst
 		 */
-		udelay(10);
-	}
+		if (!assert)
+			udelay(10);
+		break;
 
-	val = readl(priv->base + sig[rst->id].offset);
-	switch (rst->id) {
 	case IMX7_RESET_PCIE_CTRL_APPS_EN:
-		val |= sig[rst->id].bit;
-		break;
-	default:
-		val &= ~sig[rst->id].bit;
+		value = (assert) ? 0 : signal->bit;
 		break;
 	}
-	writel(val, priv->base + sig[rst->id].offset);
 
-	return 0;
+	return regmap_update_bits(imx7src->regmap,
+				  signal->offset, signal->bit, value);
 }
 
-static int imx7_reset_assert_imx7(struct reset_ctl *rst)
+static int imx7_reset_assert(struct reset_controller_dev *rcdev,
+			     unsigned long id)
 {
-	struct imx7_reset_priv *priv = dev_get_priv(rst->dev);
-	const struct imx7_src_signal *sig = imx7_src_signals;
-	u32 val;
-
-	if (rst->id >= IMX7_RESET_NUM)
-		return -EINVAL;
-
-	val = readl(priv->base + sig[rst->id].offset);
-	switch (rst->id) {
-	case IMX7_RESET_PCIE_CTRL_APPS_EN:
-		val &= ~sig[rst->id].bit;
-		break;
-	default:
-		val |= sig[rst->id].bit;
-		break;
-	}
-	writel(val, priv->base + sig[rst->id].offset);
-
-	return 0;
+	return imx7_reset_set(rcdev, id, true);
 }
 
-enum imx8mq_src_registers {
-	SRC_A53RCR0		= 0x0004,
-	SRC_HDMI_RCR		= 0x0030,
-	SRC_DISP_RCR		= 0x0034,
-	SRC_GPU_RCR		= 0x0040,
-	SRC_VPU_RCR		= 0x0044,
-	SRC_PCIE2_RCR		= 0x0048,
-	SRC_MIPIPHY1_RCR	= 0x004c,
-	SRC_MIPIPHY2_RCR	= 0x0050,
-	SRC_DDRC2_RCR		= 0x1004,
+static int imx7_reset_deassert(struct reset_controller_dev *rcdev,
+			       unsigned long id)
+{
+	return imx7_reset_set(rcdev, id, false);
+}
+
+static const struct reset_control_ops imx7_reset_ops = {
+	.assert		= imx7_reset_assert,
+	.deassert	= imx7_reset_deassert,
 };
 
-static const struct imx7_src_signal imx8mq_src_signals[IMX8MQ_RESET_NUM] = {
-	[IMX8MQ_RESET_A53_CORE_POR_RESET0]	= { SRC_A53RCR0, BIT(0) },
-	[IMX8MQ_RESET_A53_CORE_POR_RESET1]	= { SRC_A53RCR0, BIT(1) },
-	[IMX8MQ_RESET_A53_CORE_POR_RESET2]	= { SRC_A53RCR0, BIT(2) },
-	[IMX8MQ_RESET_A53_CORE_POR_RESET3]	= { SRC_A53RCR0, BIT(3) },
-	[IMX8MQ_RESET_A53_CORE_RESET0]		= { SRC_A53RCR0, BIT(4) },
-	[IMX8MQ_RESET_A53_CORE_RESET1]		= { SRC_A53RCR0, BIT(5) },
-	[IMX8MQ_RESET_A53_CORE_RESET2]		= { SRC_A53RCR0, BIT(6) },
-	[IMX8MQ_RESET_A53_CORE_RESET3]		= { SRC_A53RCR0, BIT(7) },
-	[IMX8MQ_RESET_A53_DBG_RESET0]		= { SRC_A53RCR0, BIT(8) },
-	[IMX8MQ_RESET_A53_DBG_RESET1]		= { SRC_A53RCR0, BIT(9) },
-	[IMX8MQ_RESET_A53_DBG_RESET2]		= { SRC_A53RCR0, BIT(10) },
-	[IMX8MQ_RESET_A53_DBG_RESET3]		= { SRC_A53RCR0, BIT(11) },
-	[IMX8MQ_RESET_A53_ETM_RESET0]		= { SRC_A53RCR0, BIT(12) },
-	[IMX8MQ_RESET_A53_ETM_RESET1]		= { SRC_A53RCR0, BIT(13) },
-	[IMX8MQ_RESET_A53_ETM_RESET2]		= { SRC_A53RCR0, BIT(14) },
-	[IMX8MQ_RESET_A53_ETM_RESET3]		= { SRC_A53RCR0, BIT(15) },
-	[IMX8MQ_RESET_A53_SOC_DBG_RESET]	= { SRC_A53RCR0, BIT(20) },
-	[IMX8MQ_RESET_A53_L2RESET]		= { SRC_A53RCR0, BIT(21) },
-	[IMX8MQ_RESET_SW_NON_SCLR_M4C_RST]	= { SRC_M4RCR, BIT(0) },
-	[IMX8MQ_RESET_OTG1_PHY_RESET]		= { SRC_USBOPHY1_RCR, BIT(0) },
-	[IMX8MQ_RESET_OTG2_PHY_RESET]		= { SRC_USBOPHY2_RCR, BIT(0) },
-	[IMX8MQ_RESET_MIPI_DSI_RESET_BYTE_N]	= { SRC_MIPIPHY_RCR, BIT(1) },
-	[IMX8MQ_RESET_MIPI_DSI_RESET_N]		= { SRC_MIPIPHY_RCR, BIT(2) },
-	[IMX8MQ_RESET_MIPI_DSI_DPI_RESET_N]	= { SRC_MIPIPHY_RCR, BIT(3) },
-	[IMX8MQ_RESET_MIPI_DSI_ESC_RESET_N]	= { SRC_MIPIPHY_RCR, BIT(4) },
-	[IMX8MQ_RESET_MIPI_DSI_PCLK_RESET_N]	= { SRC_MIPIPHY_RCR, BIT(5) },
-	[IMX8MQ_RESET_PCIEPHY]			= { SRC_PCIEPHY_RCR,
-						    BIT(2) | BIT(1) },
-	[IMX8MQ_RESET_PCIEPHY_PERST]		= { SRC_PCIEPHY_RCR, BIT(3) },
-	[IMX8MQ_RESET_PCIE_CTRL_APPS_EN]	= { SRC_PCIEPHY_RCR, BIT(6) },
-	[IMX8MQ_RESET_PCIE_CTRL_APPS_TURNOFF]	= { SRC_PCIEPHY_RCR, BIT(11) },
-	[IMX8MQ_RESET_HDMI_PHY_APB_RESET]	= { SRC_HDMI_RCR, BIT(0) },
-	[IMX8MQ_RESET_DISP_RESET]		= { SRC_DISP_RCR, BIT(0) },
-	[IMX8MQ_RESET_GPU_RESET]		= { SRC_GPU_RCR, BIT(0) },
-	[IMX8MQ_RESET_VPU_RESET]		= { SRC_VPU_RCR, BIT(0) },
-	[IMX8MQ_RESET_PCIEPHY2]			= { SRC_PCIE2_RCR,
-						    BIT(2) | BIT(1) },
-	[IMX8MQ_RESET_PCIEPHY2_PERST]		= { SRC_PCIE2_RCR, BIT(3) },
-	[IMX8MQ_RESET_PCIE2_CTRL_APPS_EN]	= { SRC_PCIE2_RCR, BIT(6) },
-	[IMX8MQ_RESET_PCIE2_CTRL_APPS_TURNOFF]	= { SRC_PCIE2_RCR, BIT(11) },
-	[IMX8MQ_RESET_MIPI_CSI1_CORE_RESET]	= { SRC_MIPIPHY1_RCR, BIT(0) },
-	[IMX8MQ_RESET_MIPI_CSI1_PHY_REF_RESET]	= { SRC_MIPIPHY1_RCR, BIT(1) },
-	[IMX8MQ_RESET_MIPI_CSI1_ESC_RESET]	= { SRC_MIPIPHY1_RCR, BIT(2) },
-	[IMX8MQ_RESET_MIPI_CSI2_CORE_RESET]	= { SRC_MIPIPHY2_RCR, BIT(0) },
-	[IMX8MQ_RESET_MIPI_CSI2_PHY_REF_RESET]	= { SRC_MIPIPHY2_RCR, BIT(1) },
-	[IMX8MQ_RESET_MIPI_CSI2_ESC_RESET]	= { SRC_MIPIPHY2_RCR, BIT(2) },
-	[IMX8MQ_RESET_DDRC1_PRST]		= { SRC_DDRC_RCR, BIT(0) },
-	[IMX8MQ_RESET_DDRC1_CORE_RESET]		= { SRC_DDRC_RCR, BIT(1) },
-	[IMX8MQ_RESET_DDRC1_PHY_RESET]		= { SRC_DDRC_RCR, BIT(2) },
-	[IMX8MQ_RESET_DDRC2_PHY_RESET]		= { SRC_DDRC2_RCR, BIT(0) },
-	[IMX8MQ_RESET_DDRC2_CORE_RESET]		= { SRC_DDRC2_RCR, BIT(1) },
-	[IMX8MQ_RESET_DDRC2_PRST]		= { SRC_DDRC2_RCR, BIT(2) },
-};
-
-static int imx7_reset_deassert_imx8mq(struct reset_ctl *rst)
+static int imx7_reset_probe(struct platform_device *pdev)
 {
-	struct imx7_reset_priv *priv = dev_get_priv(rst->dev);
-	const struct imx7_src_signal *sig = imx8mq_src_signals;
-	u32 val;
+	struct imx7_src *imx7src;
+	struct device *dev = &pdev->dev;
+	struct regmap_config config = { .name = "src" };
 
-	if (rst->id >= IMX8MQ_RESET_NUM)
-		return -EINVAL;
-
-	if (rst->id == IMX8MQ_RESET_PCIEPHY ||
-	    rst->id == IMX8MQ_RESET_PCIEPHY2) {
-		/*
-		 * wait for more than 10us to release phy g_rst and
-		 * btnrst
-		 */
-		udelay(10);
-	}
-
-	val = readl(priv->base + sig[rst->id].offset);
-	switch (rst->id) {
-	case IMX8MQ_RESET_PCIE_CTRL_APPS_EN:
-	case IMX8MQ_RESET_PCIE2_CTRL_APPS_EN:	/* fallthrough */
-	case IMX8MQ_RESET_MIPI_DSI_PCLK_RESET_N:	/* fallthrough */
-	case IMX8MQ_RESET_MIPI_DSI_ESC_RESET_N:	/* fallthrough */
-	case IMX8MQ_RESET_MIPI_DSI_DPI_RESET_N:	/* fallthrough */
-	case IMX8MQ_RESET_MIPI_DSI_RESET_N:	/* fallthrough */
-	case IMX8MQ_RESET_MIPI_DSI_RESET_BYTE_N:	/* fallthrough */
-		val |= sig[rst->id].bit;
-		break;
-	default:
-		val &= ~sig[rst->id].bit;
-		break;
-	}
-	writel(val, priv->base + sig[rst->id].offset);
-
-	return 0;
-}
-
-static int imx7_reset_assert_imx8mq(struct reset_ctl *rst)
-{
-	struct imx7_reset_priv *priv = dev_get_priv(rst->dev);
-	const struct imx7_src_signal *sig = imx8mq_src_signals;
-	u32 val;
-
-	if (rst->id >= IMX8MQ_RESET_NUM)
-		return -EINVAL;
-
-	val = readl(priv->base + sig[rst->id].offset);
-	switch (rst->id) {
-	case IMX8MQ_RESET_PCIE_CTRL_APPS_EN:
-	case IMX8MQ_RESET_PCIE2_CTRL_APPS_EN:	/* fallthrough */
-	case IMX8MQ_RESET_MIPI_DSI_PCLK_RESET_N:	/* fallthrough */
-	case IMX8MQ_RESET_MIPI_DSI_ESC_RESET_N:	/* fallthrough */
-	case IMX8MQ_RESET_MIPI_DSI_DPI_RESET_N:	/* fallthrough */
-	case IMX8MQ_RESET_MIPI_DSI_RESET_N:	/* fallthrough */
-	case IMX8MQ_RESET_MIPI_DSI_RESET_BYTE_N:	/* fallthrough */
-		val &= ~sig[rst->id].bit;
-		break;
-	default:
-		val |= sig[rst->id].bit;
-		break;
-	}
-	writel(val, priv->base + sig[rst->id].offset);
-
-	return 0;
-}
-
-static int imx7_reset_assert(struct reset_ctl *rst)
-{
-	struct imx7_reset_priv *priv = dev_get_priv(rst->dev);
-	return priv->ops.rst_assert(rst);
-}
-
-static int imx7_reset_deassert(struct reset_ctl *rst)
-{
-	struct imx7_reset_priv *priv = dev_get_priv(rst->dev);
-	return priv->ops.rst_deassert(rst);
-}
-
-static int imx7_reset_free(struct reset_ctl *rst)
-{
-	return 0;
-}
-
-static int imx7_reset_request(struct reset_ctl *rst)
-{
-	return 0;
-}
-
-static const struct reset_ops imx7_reset_reset_ops = {
-	.request = imx7_reset_request,
-	.free = imx7_reset_free,
-	.rst_assert = imx7_reset_assert,
-	.rst_deassert = imx7_reset_deassert,
-};
-
-static const struct udevice_id imx7_reset_ids[] = {
-	{ .compatible = "fsl,imx7d-src" },
-	{ .compatible = "fsl,imx8mq-src" },
-	{ }
-};
-
-static int imx7_reset_probe(struct udevice *dev)
-{
-	struct imx7_reset_priv *priv = dev_get_priv(dev);
-
-	priv->base = dev_remap_addr(dev);
-	if (!priv->base)
+	imx7src = devm_kzalloc(dev, sizeof(*imx7src), GFP_KERNEL);
+	if (!imx7src)
 		return -ENOMEM;
 
-	if (device_is_compatible(dev, "fsl,imx8mq-src")) {
-		priv->ops.rst_assert = imx7_reset_assert_imx8mq;
-		priv->ops.rst_deassert = imx7_reset_deassert_imx8mq;
-	} else if (device_is_compatible(dev, "fsl,imx7d-src")) {
-		priv->ops.rst_assert = imx7_reset_assert_imx7;
-		priv->ops.rst_deassert = imx7_reset_deassert_imx7;
+	imx7src->regmap = syscon_node_to_regmap(dev->of_node);
+	if (IS_ERR(imx7src->regmap)) {
+		dev_err(dev, "Unable to get imx7-src regmap");
+		return PTR_ERR(imx7src->regmap);
 	}
+	regmap_attach_dev(dev, imx7src->regmap, &config);
 
-	return 0;
+	imx7src->rcdev.owner     = THIS_MODULE;
+	imx7src->rcdev.nr_resets = IMX7_RESET_NUM;
+	imx7src->rcdev.ops       = &imx7_reset_ops;
+	imx7src->rcdev.of_node   = dev->of_node;
+
+	return devm_reset_controller_register(dev, &imx7src->rcdev);
 }
 
-U_BOOT_DRIVER(imx7_reset) = {
-	.name = "imx7_reset",
-	.id = UCLASS_RESET,
-	.of_match = imx7_reset_ids,
-	.ops = &imx7_reset_reset_ops,
-	.probe = imx7_reset_probe,
-	.priv_auto_alloc_size = sizeof(struct imx7_reset_priv),
+static const struct of_device_id imx7_reset_dt_ids[] = {
+	{ .compatible = "fsl,imx7d-src", },
+	{ /* sentinel */ },
 };
+
+static struct platform_driver imx7_reset_driver = {
+	.probe	= imx7_reset_probe,
+	.driver = {
+		.name		= KBUILD_MODNAME,
+		.of_match_table	= imx7_reset_dt_ids,
+	},
+};
+builtin_platform_driver(imx7_reset_driver);

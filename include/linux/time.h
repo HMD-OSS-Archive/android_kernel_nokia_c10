@@ -1,164 +1,317 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef _LINUX_TIME_H
 #define _LINUX_TIME_H
 
-#include <rtc.h>
-#include <vsprintf.h>
-#include <linux/types.h>
+# include <linux/cache.h>
+# include <linux/seqlock.h>
+# include <linux/math64.h>
+# include <linux/time64.h>
 
-#define _DEFUN(a,b,c) a(c)
-#define _CONST const
-#define _AND ,
+extern struct timezone sys_tz;
 
-#define _REENT_ONLY
+int get_timespec64(struct timespec64 *ts,
+		const struct timespec __user *uts);
+int put_timespec64(const struct timespec64 *ts,
+		struct timespec __user *uts);
+int get_itimerspec64(struct itimerspec64 *it,
+			const struct itimerspec __user *uit);
+int put_itimerspec64(const struct itimerspec64 *it,
+			struct itimerspec __user *uit);
 
-#define SECSPERMIN	60L
-#define MINSPERHOUR	60L
-#define HOURSPERDAY	24L
-#define SECSPERHOUR	(SECSPERMIN * MINSPERHOUR)
-#define SECSPERDAY	(SECSPERHOUR * HOURSPERDAY)
-#define DAYSPERWEEK	7
-#define MONSPERYEAR	12
+#define TIME_T_MAX	(time_t)((1UL << ((sizeof(time_t) << 3) - 1)) - 1)
 
-#define YEAR_BASE	1900
-#define EPOCH_YEAR      1970
-#define EPOCH_WDAY      4
-
-#define isleap(y) ((((y) % 4) == 0 && ((y) % 100) != 0) || ((y) % 400) == 0)
-
-
-/* Used by other time functions.  */
-struct tm {
-    int tm_sec;                   /* Seconds.     [0-60] (1 leap second) */
-    int tm_min;                   /* Minutes.     [0-59] */
-    int tm_hour;                  /* Hours.       [0-23] */
-    int tm_mday;                  /* Day.         [1-31] */
-    int tm_mon;                   /* Month.       [0-11] */
-    int tm_year;                  /* Year - 1900.  */
-    int tm_wday;                  /* Day of week. [0-6] */
-    int tm_yday;                  /* Days in year.[0-365] */
-    int tm_isdst;                 /* DST.         [-1/0/1]*/
-
-# ifdef __USE_BSD
-    long int tm_gmtoff;           /* Seconds east of UTC.  */
-    __const char *tm_zone;        /* Timezone abbreviation.  */
-# else
-    long int __tm_gmtoff;         /* Seconds east of UTC.  */
-    __const char *__tm_zone;      /* Timezone abbreviation.  */
-# endif
-};
-
-static inline char *
-_DEFUN (asctime_r, (tim_p, result),
-	_CONST struct tm *tim_p _AND
-	char *result)
+static inline int timespec_equal(const struct timespec *a,
+                                 const struct timespec *b)
 {
-    static _CONST char day_name[7][3] = {
-	"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
-    };
-    static _CONST char mon_name[12][3] = {
-	"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-	"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-    };
-
-    sprintf (result, "%.3s %.3s %.2d %.2d:%.2d:%.2d %d\n",
-	    day_name[tim_p->tm_wday],
-	    mon_name[tim_p->tm_mon],
-	    tim_p->tm_mday, tim_p->tm_hour, tim_p->tm_min,
-	    tim_p->tm_sec, 1900 + tim_p->tm_year);
-    return result;
+	return (a->tv_sec == b->tv_sec) && (a->tv_nsec == b->tv_nsec);
 }
 
-static inline struct tm *
-_DEFUN (localtime_r, (tim_p, res),
-	_CONST time_t * tim_p _AND
-	struct tm *res)
+/*
+ * lhs < rhs:  return <0
+ * lhs == rhs: return 0
+ * lhs > rhs:  return >0
+ */
+static inline int timespec_compare(const struct timespec *lhs, const struct timespec *rhs)
 {
-    static _CONST int mon_lengths[2][MONSPERYEAR] = {
-      {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
-      {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
-    } ;
-
-    static _CONST int year_lengths[2] = {
-      365,
-      366
-    } ;
-
-    long days, rem;
-    int y;
-    int yleap;
-    _CONST int *ip;
-
-    days = ((long) *tim_p) / SECSPERDAY;
-    rem = ((long) *tim_p) % SECSPERDAY;
-    while (rem < 0)
-    {
-	rem += SECSPERDAY;
-	--days;
-    }
-
-    /* compute hour, min, and sec */
-    res->tm_hour = (int) (rem / SECSPERHOUR);
-    rem %= SECSPERHOUR;
-    res->tm_min = (int) (rem / SECSPERMIN);
-    res->tm_sec = (int) (rem % SECSPERMIN);
-
-    /* compute day of week */
-    if ((res->tm_wday = ((EPOCH_WDAY + days) % DAYSPERWEEK)) < 0)
-	res->tm_wday += DAYSPERWEEK;
-
-    /* compute year & day of year */
-    y = EPOCH_YEAR;
-    if (days >= 0)
-    {
-	for (;;)
-	{
-	    yleap = isleap(y);
-	    if (days < year_lengths[yleap])
-		break;
-	    y++;
-	    days -= year_lengths[yleap];
-	}
-    }
-    else
-    {
-	do
-	{
-	    --y;
-	    yleap = isleap(y);
-	    days += year_lengths[yleap];
-	} while (days < 0);
-    }
-
-    res->tm_year = y - YEAR_BASE;
-    res->tm_yday = days;
-    ip = mon_lengths[yleap];
-    for (res->tm_mon = 0; days >= ip[res->tm_mon]; ++res->tm_mon)
-	days -= ip[res->tm_mon];
-    res->tm_mday = days + 1;
-
-    /* set daylight saving time flag */
-    res->tm_isdst = -1;
-
-    return (res);
+	if (lhs->tv_sec < rhs->tv_sec)
+		return -1;
+	if (lhs->tv_sec > rhs->tv_sec)
+		return 1;
+	return lhs->tv_nsec - rhs->tv_nsec;
 }
 
-static inline char *
-_DEFUN (ctime_r, (tim_p, result),
-	_CONST time_t * tim_p _AND
-	char * result)
-
+static inline int timeval_compare(const struct timeval *lhs, const struct timeval *rhs)
 {
-    struct tm tm;
-    return asctime_r (localtime_r (tim_p, &tm), result);
+	if (lhs->tv_sec < rhs->tv_sec)
+		return -1;
+	if (lhs->tv_sec > rhs->tv_sec)
+		return 1;
+	return lhs->tv_usec - rhs->tv_usec;
 }
 
-/* for compatibility with linux code */
-typedef __s64 time64_t;
+extern time64_t mktime64(const unsigned int year, const unsigned int mon,
+			const unsigned int day, const unsigned int hour,
+			const unsigned int min, const unsigned int sec);
 
-#ifdef CONFIG_LIB_DATE
-time64_t mktime64(const unsigned int year, const unsigned int mon,
-		  const unsigned int day, const unsigned int hour,
-		  const unsigned int min, const unsigned int sec);
+/**
+ * Deprecated. Use mktime64().
+ */
+static inline unsigned long mktime(const unsigned int year,
+			const unsigned int mon, const unsigned int day,
+			const unsigned int hour, const unsigned int min,
+			const unsigned int sec)
+{
+	return mktime64(year, mon, day, hour, min, sec);
+}
+
+extern void set_normalized_timespec(struct timespec *ts, time_t sec, s64 nsec);
+
+/*
+ * timespec_add_safe assumes both values are positive and checks
+ * for overflow. It will return TIME_T_MAX if the reutrn would be
+ * smaller then either of the arguments.
+ */
+extern struct timespec timespec_add_safe(const struct timespec lhs,
+					 const struct timespec rhs);
+
+
+static inline struct timespec timespec_add(struct timespec lhs,
+						struct timespec rhs)
+{
+	struct timespec ts_delta;
+	set_normalized_timespec(&ts_delta, lhs.tv_sec + rhs.tv_sec,
+				lhs.tv_nsec + rhs.tv_nsec);
+	return ts_delta;
+}
+
+/*
+ * sub = lhs - rhs, in normalized form
+ */
+static inline struct timespec timespec_sub(struct timespec lhs,
+						struct timespec rhs)
+{
+	struct timespec ts_delta;
+	set_normalized_timespec(&ts_delta, lhs.tv_sec - rhs.tv_sec,
+				lhs.tv_nsec - rhs.tv_nsec);
+	return ts_delta;
+}
+
+/*
+ * Returns true if the timespec is norm, false if denorm:
+ */
+static inline bool timespec_valid(const struct timespec *ts)
+{
+	/* Dates before 1970 are bogus */
+	if (ts->tv_sec < 0)
+		return false;
+	/* Can't have more nanoseconds then a second */
+	if ((unsigned long)ts->tv_nsec >= NSEC_PER_SEC)
+		return false;
+	return true;
+}
+
+static inline bool timespec_valid_strict(const struct timespec *ts)
+{
+	if (!timespec_valid(ts))
+		return false;
+	/* Disallow values that could overflow ktime_t */
+	if ((unsigned long long)ts->tv_sec >= KTIME_SEC_MAX)
+		return false;
+	return true;
+}
+
+static inline bool timeval_valid(const struct timeval *tv)
+{
+	/* Dates before 1970 are bogus */
+	if (tv->tv_sec < 0)
+		return false;
+
+	/* Can't have more microseconds then a second */
+	if (tv->tv_usec < 0 || tv->tv_usec >= USEC_PER_SEC)
+		return false;
+
+	return true;
+}
+
+extern struct timespec timespec_trunc(struct timespec t, unsigned gran);
+
+/*
+ * Validates if a timespec/timeval used to inject a time offset is valid.
+ * Offsets can be postive or negative. The value of the timeval/timespec
+ * is the sum of its fields, but *NOTE*: the field tv_usec/tv_nsec must
+ * always be non-negative.
+ */
+static inline bool timeval_inject_offset_valid(const struct timeval *tv)
+{
+	/* We don't check the tv_sec as it can be positive or negative */
+
+	/* Can't have more microseconds then a second */
+	if (tv->tv_usec < 0 || tv->tv_usec >= USEC_PER_SEC)
+		return false;
+	return true;
+}
+
+static inline bool timespec_inject_offset_valid(const struct timespec *ts)
+{
+	/* We don't check the tv_sec as it can be positive or negative */
+
+	/* Can't have more nanoseconds then a second */
+	if (ts->tv_nsec < 0 || ts->tv_nsec >= NSEC_PER_SEC)
+		return false;
+	return true;
+}
+
+/* Some architectures do not supply their own clocksource.
+ * This is mainly the case in architectures that get their
+ * inter-tick times by reading the counter on their interval
+ * timer. Since these timers wrap every tick, they're not really
+ * useful as clocksources. Wrapping them to act like one is possible
+ * but not very efficient. So we provide a callout these arches
+ * can implement for use with the jiffies clocksource to provide
+ * finer then tick granular time.
+ */
+#ifdef CONFIG_ARCH_USES_GETTIMEOFFSET
+extern u32 (*arch_gettimeoffset)(void);
 #endif
 
+struct itimerval;
+extern int do_setitimer(int which, struct itimerval *value,
+			struct itimerval *ovalue);
+extern int do_getitimer(int which, struct itimerval *value);
+
+extern long do_utimes(int dfd, const char __user *filename, struct timespec64 *times, int flags);
+
+/*
+ * Similar to the struct tm in userspace <time.h>, but it needs to be here so
+ * that the kernel source is self contained.
+ */
+struct tm {
+	/*
+	 * the number of seconds after the minute, normally in the range
+	 * 0 to 59, but can be up to 60 to allow for leap seconds
+	 */
+	int tm_sec;
+	/* the number of minutes after the hour, in the range 0 to 59*/
+	int tm_min;
+	/* the number of hours past midnight, in the range 0 to 23 */
+	int tm_hour;
+	/* the day of the month, in the range 1 to 31 */
+	int tm_mday;
+	/* the number of months since January, in the range 0 to 11 */
+	int tm_mon;
+	/* the number of years since 1900 */
+	long tm_year;
+	/* the number of days since Sunday, in the range 0 to 6 */
+	int tm_wday;
+	/* the number of days since January 1, in the range 0 to 365 */
+	int tm_yday;
+};
+
+void time64_to_tm(time64_t totalsecs, int offset, struct tm *result);
+
+/**
+ * time_to_tm - converts the calendar time to local broken-down time
+ *
+ * @totalsecs	the number of seconds elapsed since 00:00:00 on January 1, 1970,
+ *		Coordinated Universal Time (UTC).
+ * @offset	offset seconds adding to totalsecs.
+ * @result	pointer to struct tm variable to receive broken-down time
+ */
+static inline void time_to_tm(time_t totalsecs, int offset, struct tm *result)
+{
+	time64_to_tm(totalsecs, offset, result);
+}
+
+/**
+ * timespec_to_ns - Convert timespec to nanoseconds
+ * @ts:		pointer to the timespec variable to be converted
+ *
+ * Returns the scalar nanosecond representation of the timespec
+ * parameter.
+ */
+static inline s64 timespec_to_ns(const struct timespec *ts)
+{
+	return ((s64) ts->tv_sec * NSEC_PER_SEC) + ts->tv_nsec;
+}
+
+/**
+ * timeval_to_ns - Convert timeval to nanoseconds
+ * @ts:		pointer to the timeval variable to be converted
+ *
+ * Returns the scalar nanosecond representation of the timeval
+ * parameter.
+ */
+static inline s64 timeval_to_ns(const struct timeval *tv)
+{
+	return ((s64) tv->tv_sec * NSEC_PER_SEC) +
+		tv->tv_usec * NSEC_PER_USEC;
+}
+
+/**
+ * ns_to_timespec - Convert nanoseconds to timespec
+ * @nsec:	the nanoseconds value to be converted
+ *
+ * Returns the timespec representation of the nsec parameter.
+ */
+extern struct timespec ns_to_timespec(const s64 nsec);
+
+/**
+ * ns_to_timeval - Convert nanoseconds to timeval
+ * @nsec:	the nanoseconds value to be converted
+ *
+ * Returns the timeval representation of the nsec parameter.
+ */
+extern struct timeval ns_to_timeval(const s64 nsec);
+
+/**
+ * timespec_add_ns - Adds nanoseconds to a timespec
+ * @a:		pointer to timespec to be incremented
+ * @ns:		unsigned nanoseconds value to be added
+ *
+ * This must always be inlined because its used from the x86-64 vdso,
+ * which cannot call other kernel functions.
+ */
+static __always_inline void timespec_add_ns(struct timespec *a, u64 ns)
+{
+	a->tv_sec += __iter_div_u64_rem(a->tv_nsec + ns, NSEC_PER_SEC, &ns);
+	a->tv_nsec = ns;
+}
+
+static inline bool itimerspec64_valid(const struct itimerspec64 *its)
+{
+	if (!timespec64_valid(&(its->it_interval)) ||
+		!timespec64_valid(&(its->it_value)))
+		return false;
+
+	return true;
+}
+
+/**
+ * time_after32 - compare two 32-bit relative times
+ * @a:	the time which may be after @b
+ * @b:	the time which may be before @a
+ *
+ * time_after32(a, b) returns true if the time @a is after time @b.
+ * time_before32(b, a) returns true if the time @b is before time @a.
+ *
+ * Similar to time_after(), compare two 32-bit timestamps for relative
+ * times.  This is useful for comparing 32-bit seconds values that can't
+ * be converted to 64-bit values (e.g. due to disk format or wire protocol
+ * issues) when it is known that the times are less than 68 years apart.
+ */
+#define time_after32(a, b)	((s32)((u32)(b) - (u32)(a)) < 0)
+#define time_before32(b, a)	time_after32(a, b)
+
+/**
+ * time_between32 - check if a 32-bit timestamp is within a given time range
+ * @t:	the time which may be within [l,h]
+ * @l:	the lower bound of the range
+ * @h:	the higher bound of the range
+ *
+ * time_before32(t, l, h) returns true if @l <= @t <= @h. All operands are
+ * treated as 32-bit integers.
+ *
+ * Equivalent to !(time_before32(@t, @l) || time_after32(@t, @h)).
+ */
+#define time_between32(t, l, h) ((u32)(h) - (u32)(l) >= (u32)(t) - (u32)(l))
 #endif

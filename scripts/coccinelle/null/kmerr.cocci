@@ -1,7 +1,7 @@
-/// This semantic patch looks for malloc etc that are not followed by a
+/// This semantic patch looks for kmalloc etc that are not followed by a
 /// NULL check.  It only gives a report in the case where there is some
 /// error handling code later in the function, which may be helpful
-/// in determining what the error handling code for the call to malloc etc
+/// in determining what the error handling code for the call to kmalloc etc
 /// should be.
 ///
 // Confidence: High
@@ -11,9 +11,6 @@
 // URL: http://coccinelle.lip6.fr/
 // Comments:
 // Options: --no-includes --include-headers
-//
-// SPDX-License-Identifier:	GPL-2.0
-//
 
 virtual context
 virtual org
@@ -37,7 +34,7 @@ position any withtest.p;
 identifier f;
 @@
 
-*x@p1 = \(malloc\|calloc\)(...);
+*x@p1 = \(kmalloc\|kzalloc\|kcalloc\)(...);
 ...
 *x1@p = f(...);
 if (!x1) S
@@ -53,7 +50,7 @@ position any withtest.p;
 identifier f;
 @@
 
-x@p1 = \(malloc\|calloc\)(...);
+x@p1 = \(kmalloc\|kzalloc\|kcalloc\)(...);
 ...
 x1@p = f@p2(...);
 if (!x1) S

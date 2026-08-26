@@ -1,38 +1,54 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
- * BTRFS filesystem implementation for U-Boot
+ * Copyright (C) 2014 Filipe David Borba Manana <fdmanana@gmail.com>
  *
- * 2017 Marek Behun, CZ.NIC, marek.behun@nic.cz
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public
+ * License v2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
  */
 
-#include "btrfs.h"
-#include <u-boot/crc.h>
-#include <asm/unaligned.h>
+#include <crypto/hash.h>
+#include <linux/err.h>
+#include "hash.h"
 
-static u32 btrfs_crc32c_table[256];
+static struct crypto_shash *tfm;
 
-void btrfs_hash_init(void)
+int __init btrfs_hash_init(void)
 {
-	static int inited = 0;
+	tfm = crypto_alloc_shash("crc32c", 0, 0);
 
-	if (!inited) {
-		crc32c_init(btrfs_crc32c_table, 0x82F63B78);
-		inited = 1;
-	}
+	return PTR_ERR_OR_ZERO(tfm);
 }
 
-u32 btrfs_crc32c(u32 crc, const void *data, size_t length)
+const char* btrfs_crc32c_impl(void)
 {
-	return crc32c_cal(crc, (const char *) data, length,
-			  btrfs_crc32c_table);
+	return crypto_tfm_alg_driver_name(crypto_shash_tfm(tfm));
 }
 
-u32 btrfs_csum_data(char *data, u32 seed, size_t len)
+void btrfs_hash_exit(void)
 {
-	return btrfs_crc32c(seed, data, len);
+	crypto_free_shash(tfm);
 }
 
-void btrfs_csum_final(u32 crc, void *result)
+u32 btrfs_crc32c(u32 crc, const void *address, unsigned int length)
 {
-	put_unaligned(cpu_to_le32(~crc), (u32 *)result);
+	SHASH_DESC_ON_STACK(shash, tfm);
+	u32 *ctx = (u32 *)shash_desc_ctx(shash);
+	u32 retval;
+	int err;
+
+	shash->tfm = tfm;
+	shash->flags = 0;
+	*ctx = crc;
+
+	err = crypto_shash_update(shash, address, length);
+	BUG_ON(err);
+
+	retval = *ctx;
+	barrier_data(ctx);
+	return retval;
 }

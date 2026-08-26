@@ -1,8 +1,20 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * This file is part of UBIFS.
  *
  * Copyright (C) 2006-2008 Nokia Corporation.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published by
+ * the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  *
  * Authors: Adrian Hunter
  *          Artem Bityutskiy (Битюцкий Артём)
@@ -32,16 +44,9 @@
  */
 
 #include "ubifs.h"
-#ifndef __UBOOT__
 #include <linux/crc16.h>
 #include <linux/math64.h>
 #include <linux/slab.h>
-#else
-#include <linux/compat.h>
-#include <linux/err.h>
-#include <ubi_uboot.h>
-#include "crc16.h"
-#endif
 
 /**
  * do_calc_lpt_geom - calculate sizes for the LPT area.
@@ -1051,7 +1056,6 @@ static int unpack_ltab(const struct ubifs_info *c, void *buf)
 	return err;
 }
 
-#ifndef __UBOOT__
 /**
  * unpack_lsave - unpack the LPT's save table.
  * @c: UBIFS file-system description object
@@ -1077,7 +1081,6 @@ static int unpack_lsave(const struct ubifs_info *c, void *buf)
 	err = check_lpt_crc(c, buf, c->lsave_sz);
 	return err;
 }
-#endif
 
 /**
  * validate_nnode - validate a nnode.
@@ -1337,7 +1340,6 @@ out:
 	return err;
 }
 
-#ifndef __UBOOT__
 /**
  * read_lsave - read LPT's save table.
  * @c: UBIFS file-system description object
@@ -1379,7 +1381,6 @@ out:
 	vfree(buf);
 	return err;
 }
-#endif
 
 /**
  * ubifs_get_nnode - get a nnode.
@@ -1497,11 +1498,10 @@ static struct ubifs_nnode *dirty_cow_nnode(struct ubifs_info *c,
 	}
 
 	/* nnode is being committed, so copy it */
-	n = kmalloc(sizeof(struct ubifs_nnode), GFP_NOFS);
+	n = kmemdup(nnode, sizeof(struct ubifs_nnode), GFP_NOFS);
 	if (unlikely(!n))
 		return ERR_PTR(-ENOMEM);
 
-	memcpy(n, nnode, sizeof(struct ubifs_nnode));
 	n->cnext = NULL;
 	__set_bit(DIRTY_CNODE, &n->flags);
 	__clear_bit(COW_CNODE, &n->flags);
@@ -1548,11 +1548,10 @@ static struct ubifs_pnode *dirty_cow_pnode(struct ubifs_info *c,
 	}
 
 	/* pnode is being committed, so copy it */
-	p = kmalloc(sizeof(struct ubifs_pnode), GFP_NOFS);
+	p = kmemdup(pnode, sizeof(struct ubifs_pnode), GFP_NOFS);
 	if (unlikely(!p))
 		return ERR_PTR(-ENOMEM);
 
-	memcpy(p, pnode, sizeof(struct ubifs_pnode));
 	p->cnext = NULL;
 	__set_bit(DIRTY_CNODE, &p->flags);
 	__clear_bit(COW_CNODE, &p->flags);
@@ -1677,7 +1676,6 @@ static int lpt_init_rd(struct ubifs_info *c)
 	return 0;
 }
 
-#ifndef __UBOOT__
 /**
  * lpt_init_wr - initialize the LPT for writing.
  * @c: UBIFS file-system description object
@@ -1716,7 +1714,6 @@ static int lpt_init_wr(struct ubifs_info *c)
 
 	return 0;
 }
-#endif
 
 /**
  * ubifs_lpt_init - initialize the LPT.
@@ -1740,21 +1737,17 @@ int ubifs_lpt_init(struct ubifs_info *c, int rd, int wr)
 			goto out_err;
 	}
 
-#ifndef __UBOOT__
 	if (wr) {
 		err = lpt_init_wr(c);
 		if (err)
 			goto out_err;
 	}
-#endif
 
 	return 0;
 
 out_err:
-#ifndef __UBOOT__
 	if (wr)
 		ubifs_lpt_free(c, 1);
-#endif
 	if (rd)
 		ubifs_lpt_free(c, 0);
 	return err;

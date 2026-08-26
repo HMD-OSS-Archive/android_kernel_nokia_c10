@@ -1,8 +1,20 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * This file is part of UBIFS.
  *
  * Copyright (C) 2006-2008 Nokia Corporation.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published by
+ * the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  *
  * Authors: Artem Bityutskiy (Битюцкий Артём)
  *          Adrian Hunter
@@ -11,11 +23,6 @@
 /* This file implements reading and writing the master node */
 
 #include "ubifs.h"
-#ifdef __UBOOT__
-#include <linux/compat.h>
-#include <linux/err.h>
-#include <ubi_uboot.h>
-#endif
 
 /**
  * scan_for_master - search the valid master node.
@@ -336,14 +343,11 @@ int ubifs_read_master(struct ubifs_info *c)
 	if (err)
 		return err;
 
-#ifndef __UBOOT__
 	err = dbg_old_index_check_init(c, &c->zroot);
-#endif
 
 	return err;
 }
 
-#ifndef __UBOOT__
 /**
  * ubifs_write_master - write master node.
  * @c: UBIFS file-system description object
@@ -389,4 +393,3 @@ int ubifs_write_master(struct ubifs_info *c)
 
 	return err;
 }
-#endif

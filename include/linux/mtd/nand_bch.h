@@ -14,7 +14,7 @@
 struct mtd_info;
 struct nand_bch_control;
 
-#if defined(CONFIG_NAND_ECC_BCH)
+#if defined(CONFIG_MTD_NAND_ECC_BCH)
 
 static inline int mtd_nand_has_bch(void) { return 1; }
 
@@ -38,7 +38,7 @@ struct nand_bch_control *nand_bch_init(struct mtd_info *mtd);
  */
 void nand_bch_free(struct nand_bch_control *nbc);
 
-#else /* !CONFIG_NAND_ECC_BCH */
+#else /* !CONFIG_MTD_NAND_ECC_BCH */
 
 static inline int mtd_nand_has_bch(void) { return 0; }
 
@@ -63,6 +63,6 @@ static inline struct nand_bch_control *nand_bch_init(struct mtd_info *mtd)
 
 static inline void nand_bch_free(struct nand_bch_control *nbc) {}
 
-#endif /* CONFIG_NAND_ECC_BCH */
+#endif /* CONFIG_MTD_NAND_ECC_BCH */
 
 #endif /* __MTD_NAND_BCH_H__ */

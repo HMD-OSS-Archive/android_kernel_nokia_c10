@@ -1,6 +1,18 @@
-// SPDX-License-Identifier: GPL-2.0
 /*
  * Generic binary BCH encoding/decoding library
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published by
+ * the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
  * Copyright © 2011 Parrot S.A.
  *
@@ -53,38 +65,12 @@
  * finite fields GF(2^q). In Rapport de recherche INRIA no 2829, 1996.
  */
 
-#ifndef USE_HOSTCC
-#include <common.h>
-#include <ubi_uboot.h>
-
+#include <linux/kernel.h>
+#include <linux/errno.h>
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/slab.h>
 #include <linux/bitops.h>
-#else
-#include <errno.h>
-#if defined(__FreeBSD__)
-#include <sys/endian.h>
-#elif defined(__APPLE__)
-#include <machine/endian.h>
-#include <libkern/OSByteOrder.h>
-#else
-#include <endian.h>
-#endif
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
-
-#undef cpu_to_be32
-#if defined(__APPLE__)
-#define cpu_to_be32 OSSwapHostToBigInt32
-#else
-#define cpu_to_be32 htobe32
-#endif
-#define DIV_ROUND_UP(n,d) (((n) + (d) - 1) / (d))
-#define kmalloc(size, flags)	malloc(size)
-#define kzalloc(size, flags)	calloc(1, size)
-#define kfree free
-#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
-#endif
-
 #include <asm/byteorder.h>
 #include <linux/bch.h>
 
@@ -121,39 +107,6 @@ struct gf_poly_deg1 {
 	struct gf_poly poly;
 	unsigned int   c[2];
 };
-
-#ifdef USE_HOSTCC
-#if !defined(__DragonFly__) && !defined(__FreeBSD__) && !defined(__APPLE__)
-static int fls(int x)
-{
-	int r = 32;
-
-	if (!x)
-		return 0;
-	if (!(x & 0xffff0000u)) {
-		x <<= 16;
-		r -= 16;
-	}
-	if (!(x & 0xff000000u)) {
-		x <<= 8;
-		r -= 8;
-	}
-	if (!(x & 0xf0000000u)) {
-		x <<= 4;
-		r -= 4;
-	}
-	if (!(x & 0xc0000000u)) {
-		x <<= 2;
-		r -= 2;
-	}
-	if (!(x & 0x80000000u)) {
-		x <<= 1;
-		r -= 1;
-	}
-	return r;
-}
-#endif
-#endif
 
 /*
  * same as encode_bch(), but process input data one byte at a time
@@ -298,6 +251,7 @@ void encode_bch(struct bch_control *bch, const uint8_t *data,
 	if (ecc)
 		store_ecc8(bch, ecc, bch->ecc_buf);
 }
+EXPORT_SYMBOL_GPL(encode_bch);
 
 static inline int modulo(struct bch_control *bch, unsigned int v)
 {
@@ -1089,6 +1043,7 @@ int decode_bch(struct bch_control *bch, const uint8_t *data, unsigned int len,
 	}
 	return (err >= 0) ? err : -EBADMSG;
 }
+EXPORT_SYMBOL_GPL(decode_bch);
 
 /*
  * generate Galois field lookup tables
@@ -1379,6 +1334,7 @@ fail:
 	free_bch(bch);
 	return NULL;
 }
+EXPORT_SYMBOL_GPL(init_bch);
 
 /**
  *  free_bch - free the BCH control structure
@@ -1405,3 +1361,8 @@ void free_bch(struct bch_control *bch)
 		kfree(bch);
 	}
 }
+EXPORT_SYMBOL_GPL(free_bch);
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Ivan Djelic <ivan.djelic@parrot.com>");
+MODULE_DESCRIPTION("Binary BCH encoder/decoder");

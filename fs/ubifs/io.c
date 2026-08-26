@@ -1,9 +1,21 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * This file is part of UBIFS.
  *
  * Copyright (C) 2006-2008 Nokia Corporation.
  * Copyright (C) 2006, 2007 University of Szeged, Hungary
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published by
+ * the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  *
  * Authors: Artem Bityutskiy (Битюцкий Артём)
  *          Adrian Hunter
@@ -58,14 +70,8 @@
  * they are read from the flash media.
  */
 
-#ifndef __UBOOT__
 #include <linux/crc32.h>
 #include <linux/slab.h>
-#include <u-boot/crc.h>
-#else
-#include <linux/compat.h>
-#include <linux/err.h>
-#endif
 #include "ubifs.h"
 
 /**
@@ -118,10 +124,8 @@ int ubifs_leb_write(struct ubifs_info *c, int lnum, const void *buf, int offs,
 		return -EROFS;
 	if (!dbg_is_tst_rcvry(c))
 		err = ubi_leb_write(c->ubi, lnum, buf, offs, len);
-#ifndef __UBOOT__
 	else
 		err = dbg_leb_write(c, lnum, buf, offs, len);
-#endif
 	if (err) {
 		ubifs_err(c, "writing %d bytes to LEB %d:%d failed, error %d",
 			  len, lnum, offs, err);
@@ -140,10 +144,8 @@ int ubifs_leb_change(struct ubifs_info *c, int lnum, const void *buf, int len)
 		return -EROFS;
 	if (!dbg_is_tst_rcvry(c))
 		err = ubi_leb_change(c->ubi, lnum, buf, len);
-#ifndef __UBOOT__
 	else
 		err = dbg_leb_change(c, lnum, buf, len);
-#endif
 	if (err) {
 		ubifs_err(c, "changing %d bytes in LEB %d failed, error %d",
 			  len, lnum, err);
@@ -162,10 +164,8 @@ int ubifs_leb_unmap(struct ubifs_info *c, int lnum)
 		return -EROFS;
 	if (!dbg_is_tst_rcvry(c))
 		err = ubi_leb_unmap(c->ubi, lnum);
-#ifndef __UBOOT__
 	else
 		err = dbg_leb_unmap(c, lnum);
-#endif
 	if (err) {
 		ubifs_err(c, "unmap LEB %d failed, error %d", lnum, err);
 		ubifs_ro_mode(c, err);
@@ -183,10 +183,8 @@ int ubifs_leb_map(struct ubifs_info *c, int lnum)
 		return -EROFS;
 	if (!dbg_is_tst_rcvry(c))
 		err = ubi_leb_map(c->ubi, lnum);
-#ifndef __UBOOT__
 	else
 		err = dbg_leb_map(c, lnum);
-#endif
 	if (err) {
 		ubifs_err(c, "mapping LEB %d failed, error %d", lnum, err);
 		ubifs_ro_mode(c, err);
@@ -431,7 +429,6 @@ void ubifs_prep_grp_node(struct ubifs_info *c, void *node, int len, int last)
 	ch->crc = cpu_to_le32(crc);
 }
 
-#ifndef __UBOOT__
 /**
  * wbuf_timer_callback - write-buffer timer callback function.
  * @timer: timer data (write-buffer descriptor)
@@ -455,19 +452,24 @@ static enum hrtimer_restart wbuf_timer_callback_nolock(struct hrtimer *timer)
  */
 static void new_wbuf_timer_nolock(struct ubifs_wbuf *wbuf)
 {
+	ktime_t softlimit = ms_to_ktime(dirty_writeback_interval * 10);
+	unsigned long long delta = dirty_writeback_interval;
+
+	/* centi to milli, milli to nano, then 10% */
+	delta *= 10ULL * NSEC_PER_MSEC / 10ULL;
+
 	ubifs_assert(!hrtimer_active(&wbuf->timer));
+	ubifs_assert(delta <= ULONG_MAX);
 
 	if (wbuf->no_timer)
 		return;
 	dbg_io("set timer for jhead %s, %llu-%llu millisecs",
 	       dbg_jhead(wbuf->jhead),
-	       div_u64(ktime_to_ns(wbuf->softlimit), USEC_PER_SEC),
-	       div_u64(ktime_to_ns(wbuf->softlimit) + wbuf->delta,
-		       USEC_PER_SEC));
-	hrtimer_start_range_ns(&wbuf->timer, wbuf->softlimit, wbuf->delta,
+	       div_u64(ktime_to_ns(softlimit), USEC_PER_SEC),
+	       div_u64(ktime_to_ns(softlimit) + delta, USEC_PER_SEC));
+	hrtimer_start_range_ns(&wbuf->timer, softlimit, delta,
 			       HRTIMER_MODE_REL);
 }
-#endif
 
 /**
  * cancel_wbuf_timer - cancel write-buffer timer.
@@ -478,9 +480,7 @@ static void cancel_wbuf_timer_nolock(struct ubifs_wbuf *wbuf)
 	if (wbuf->no_timer)
 		return;
 	wbuf->need_sync = 0;
-#ifndef __UBOOT__
 	hrtimer_cancel(&wbuf->timer);
-#endif
 }
 
 /**
@@ -598,7 +598,6 @@ int ubifs_wbuf_seek_nolock(struct ubifs_wbuf *wbuf, int lnum, int offs)
 	return 0;
 }
 
-#ifndef __UBOOT__
 /**
  * ubifs_bg_wbufs_sync - synchronize write-buffers.
  * @c: UBIFS file-system description object
@@ -885,7 +884,6 @@ int ubifs_write_node(struct ubifs_info *c, void *buf, int len, int lnum,
 
 	return err;
 }
-#endif
 
 /**
  * ubifs_read_node_wbuf - read node from the media or write-buffer.
@@ -1065,14 +1063,8 @@ int ubifs_wbuf_init(struct ubifs_info *c, struct ubifs_wbuf *wbuf)
 	wbuf->c = c;
 	wbuf->next_ino = 0;
 
-#ifndef __UBOOT__
 	hrtimer_init(&wbuf->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	wbuf->timer.function = wbuf_timer_callback_nolock;
-	wbuf->softlimit = ktime_set(WBUF_TIMEOUT_SOFTLIMIT, 0);
-	wbuf->delta = WBUF_TIMEOUT_HARDLIMIT - WBUF_TIMEOUT_SOFTLIMIT;
-	wbuf->delta *= 1000000000ULL;
-	ubifs_assert(wbuf->delta <= ULONG_MAX);
-#endif
 	return 0;
 }
 

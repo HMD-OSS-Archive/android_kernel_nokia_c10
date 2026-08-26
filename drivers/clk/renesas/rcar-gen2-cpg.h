@@ -33,17 +33,11 @@ struct rcar_gen2_cpg_pll_config {
 	unsigned int pll0_mult;		/* leave as zero if PLL0CR exists */
 };
 
-struct gen2_clk_priv {
-	void __iomem		*base;
-	struct cpg_mssr_info	*info;
-	struct clk		clk_extal;
-	struct clk		clk_extal_usb;
-	const struct rcar_gen2_cpg_pll_config *cpg_pll_config;
-};
-
-int gen2_clk_probe(struct udevice *dev);
-int gen2_clk_remove(struct udevice *dev);
-
-extern const struct clk_ops gen2_clk_ops;
+struct clk *rcar_gen2_cpg_clk_register(struct device *dev,
+				       const struct cpg_core_clk *core,
+				       const struct cpg_mssr_info *info,
+				       struct clk **clks, void __iomem *base);
+int rcar_gen2_cpg_init(const struct rcar_gen2_cpg_pll_config *config,
+		       unsigned int pll0_div, u32 mode);
 
 #endif

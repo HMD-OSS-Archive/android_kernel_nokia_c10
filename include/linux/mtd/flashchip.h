@@ -1,21 +1,32 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * Copyright © 2000      Red Hat UK Limited
  * Copyright © 2000-2010 David Woodhouse <dwmw2@infradead.org>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  *
  */
 
 #ifndef __MTD_FLASHCHIP_H__
 #define __MTD_FLASHCHIP_H__
 
-#ifndef __UBOOT__
 /* For spinlocks. sched.h includes spinlock.h from whichever directory it
  * happens to be in - so we don't have to care whether we're on 2.2, which
  * has asm/spinlock.h, or 2.4, which has linux/spinlock.h
  */
 #include <linux/sched.h>
 #include <linux/mutex.h>
-#endif
 
 typedef enum {
 	FL_READY,
@@ -74,12 +85,11 @@ struct flchip {
 	unsigned int write_suspended:1;
 	unsigned int erase_suspended:1;
 	unsigned long in_progress_block_addr;
+	unsigned long in_progress_block_mask;
 
 	struct mutex mutex;
-#ifndef __UBOOT__
 	wait_queue_head_t wq; /* Wait on here when we're waiting for the chip
 			     to be ready */
-#endif
 	int word_write_time;
 	int buffer_write_time;
 	int erase_time;

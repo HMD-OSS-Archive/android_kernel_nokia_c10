@@ -1,8 +1,20 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
  * This file is part of UBIFS.
  *
  * Copyright (C) 2006-2008 Nokia Corporation
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published by
+ * the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  *
  * Authors: Artem Bityutskiy (Битюцкий Артём)
  *          Adrian Hunter
@@ -132,7 +144,6 @@ static inline int ubifs_wbuf_sync(struct ubifs_wbuf *wbuf)
 	return err;
 }
 
-#ifndef __UBOOT__
 /**
  * ubifs_encode_dev - encode device node IDs.
  * @dev: UBIFS device node information
@@ -144,15 +155,9 @@ static inline int ubifs_wbuf_sync(struct ubifs_wbuf *wbuf)
  */
 static inline int ubifs_encode_dev(union ubifs_dev_desc *dev, dev_t rdev)
 {
-	if (new_valid_dev(rdev)) {
-		dev->new = cpu_to_le32(new_encode_dev(rdev));
-		return sizeof(dev->new);
-	} else {
-		dev->huge = cpu_to_le64(huge_encode_dev(rdev));
-		return sizeof(dev->huge);
-	}
+	dev->new = cpu_to_le32(new_encode_dev(rdev));
+	return sizeof(dev->new);
 }
-#endif
 
 /**
  * ubifs_add_dirt - add dirty space to LEB properties.
@@ -216,24 +221,7 @@ struct ubifs_branch *ubifs_idx_branch(const struct ubifs_info *c,
 static inline void *ubifs_idx_key(const struct ubifs_info *c,
 				  const struct ubifs_idx_node *idx)
 {
-#ifndef __UBOOT__
 	return (void *)((struct ubifs_branch *)idx->branches)->key;
-#else
-	struct ubifs_branch *tmp;
-
-	tmp = (struct ubifs_branch *)idx->branches;
-	return (void *)tmp->key;
-#endif
-}
-
-/**
- * ubifs_current_time - round current time to time granularity.
- * @inode: inode
- */
-static inline struct timespec ubifs_current_time(struct inode *inode)
-{
-	return (inode->i_sb->s_time_gran < NSEC_PER_SEC) ?
-		current_fs_time(inode->i_sb) : CURRENT_TIME_SEC;
 }
 
 /**

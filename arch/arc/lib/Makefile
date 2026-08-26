@@ -1,17 +1,11 @@
-# SPDX-License-Identifier: GPL-2.0+
 #
-# Copyright (C) 2013-2014 Synopsys, Inc. All rights reserved.
+# Copyright (C) 2004, 2007-2010, 2011-2012 Synopsys, Inc. (www.synopsys.com)
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 2 as
+# published by the Free Software Foundation.
 
-extra-y	= start.o
-head-y := start.o
-obj-y += cache.o
-obj-y += cpu.o
-obj-y += interrupts.o
-obj-y += relocate.o
-obj-y += reset.o
-obj-y += ints_low.o
-obj-y += init_helpers.o
+lib-y	:= strchr-700.o strcpy-700.o strlen.o memcmp.o
 
-obj-$(CONFIG_CMD_BOOTM) += bootm.o
-
-lib-$(CONFIG_USE_PRIVATE_LIBGCC) += _millicodethunk.o libgcc2.o
+lib-$(CONFIG_ISA_ARCOMPACT)	+= memcpy-700.o memset.o strcmp.o
+lib-$(CONFIG_ISA_ARCV2)		+= memcpy-archs.o memset-archs.o strcmp-archs.o

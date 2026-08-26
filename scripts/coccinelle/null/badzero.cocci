@@ -10,11 +10,8 @@
 // Copyright: (C) 2012 Julia Lawall, INRIA/LIP6.  GPLv2.
 // Copyright: (C) 2012 Gilles Muller, INRIA/LiP6.  GPLv2.
 // URL: http://coccinelle.lip6.fr/
-// Requires: 1.0.0
+// Comments: Requires Coccinelle version 1.0.0-rc20 or later
 // Options:
-//
-// SPDX-License-Identifier:	GPL-2.0
-//
 
 virtual patch
 virtual context

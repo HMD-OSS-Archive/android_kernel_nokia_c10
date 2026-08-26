@@ -1,151 +1,140 @@
-menu "Reset Controller Support"
+config ARCH_HAS_RESET_CONTROLLER
+	bool
 
-config DM_RESET
-	bool "Enable reset controllers using Driver Model"
-	depends on DM && OF_CONTROL
+menuconfig RESET_CONTROLLER
+	bool "Reset Controller Support"
+	default y if ARCH_HAS_RESET_CONTROLLER
 	help
-	  Enable support for the reset controller driver class. Many hardware
-	  modules are equipped with a reset signal, typically driven by some
-	  reset controller hardware module within the chip. In U-Boot, reset
-	  controller drivers allow control over these reset signals. In some
-	  cases this API is applicable to chips outside the CPU as well,
-	  although driving such reset isgnals using GPIOs may be more
-	  appropriate in this case.
+	  Generic Reset Controller support.
 
-config SANDBOX_RESET
-	bool "Enable the sandbox reset test driver"
-	depends on DM_MAILBOX && SANDBOX
-	help
-	  Enable support for a test reset controller implementation, which
-	  simply accepts requests to reset various HW modules without actually
-	  doing anything beyond a little error checking.
+	  This framework is designed to abstract reset handling of devices
+	  via GPIOs or SoC-internal reset controller modules.
 
-config STI_RESET
-	bool "Enable the STi reset"
-	depends on ARCH_STI
-	help
-	  Support for reset controllers on STMicroelectronics STiH407 family SoCs.
-	  Say Y if you want to control reset signals provided by system config
-	  block.
+	  If unsure, say no.
 
-config STM32_RESET
-	bool "Enable the STM32 reset"
-	depends on STM32 || ARCH_STM32MP
-	help
-	  Support for reset controllers on STMicroelectronics STM32 family SoCs.
-	  This resset driver is compatible with STM32 F4/F7 and H7 SoCs.
+if RESET_CONTROLLER
 
-config TEGRA_CAR_RESET
-	bool "Enable Tegra CAR-based reset driver"
-	depends on TEGRA_CAR
+config RESET_A10SR
+	tristate "Altera Arria10 System Resource Reset"
+	depends on MFD_ALTERA_A10SR
 	help
-	  Enable support for manipulating Tegra's on-SoC reset signals via
-	  direct register access to the Tegra CAR (Clock And Reset controller).
+	  This option enables support for the external reset functions for
+	  peripheral PHYs on the Altera Arria10 System Resource Chip.
 
-config TEGRA186_RESET
-	bool "Enable Tegra186 BPMP-based reset driver"
-	depends on TEGRA186_BPMP
+config RESET_ATH79
+	bool "AR71xx Reset Driver" if COMPILE_TEST
+	default ATH79
 	help
-	  Enable support for manipulating Tegra's on-SoC reset signals via IPC
-	  requests to the BPMP (Boot and Power Management Processor).
+	  This enables the ATH79 reset controller driver that supports the
+	  AR71xx SoC reset controller.
+
+config RESET_BERLIN
+	bool "Berlin Reset Driver" if COMPILE_TEST
+	default ARCH_BERLIN
+	help
+	  This enables the reset controller driver for Marvell Berlin SoCs.
+
+config RESET_HSDK
+	bool "Synopsys HSDK Reset Driver"
+	depends on HAS_IOMEM
+	depends on ARC_SOC_HSDK || COMPILE_TEST
+	help
+	  This enables the reset controller driver for HSDK board.
+
+config RESET_IMX7
+	bool "i.MX7 Reset Driver" if COMPILE_TEST
+	default SOC_IMX7D
+	select MFD_SYSCON
+	help
+	  This enables the reset controller driver for i.MX7 SoCs.
+
+config RESET_LANTIQ
+	bool "Lantiq XWAY Reset Driver" if COMPILE_TEST
+	default SOC_TYPE_XWAY
+	help
+	  This enables the reset controller driver for Lantiq / Intel XWAY SoCs.
+
+config RESET_LPC18XX
+	bool "LPC18xx/43xx Reset Driver" if COMPILE_TEST
+	default ARCH_LPC18XX
+	help
+	  This enables the reset controller driver for NXP LPC18xx/43xx SoCs.
+
+config RESET_MESON
+	bool "Meson Reset Driver" if COMPILE_TEST
+	default ARCH_MESON
+	help
+	  This enables the reset driver for Amlogic Meson SoCs.
+
+config RESET_OXNAS
+	bool
+
+config RESET_PISTACHIO
+	bool "Pistachio Reset Driver" if COMPILE_TEST
+	default MACH_PISTACHIO
+	help
+	  This enables the reset driver for ImgTec Pistachio SoCs.
+
+config RESET_SOCFPGA
+	bool "SoCFPGA Reset Driver" if COMPILE_TEST
+	default ARCH_SOCFPGA
+	help
+	  This enables the reset controller driver for Altera SoCFPGAs.
+
+config RESET_STM32
+	bool "STM32 Reset Driver" if COMPILE_TEST
+	default ARCH_STM32
+	help
+	  This enables the RCC reset controller driver for STM32 MCUs.
+
+config RESET_SUNXI
+	bool "Allwinner SoCs Reset Driver" if COMPILE_TEST && !ARCH_SUNXI
+	default ARCH_SUNXI
+	help
+	  This enables the reset driver for Allwinner SoCs.
 
 config RESET_TI_SCI
-	bool "TI System Control Interface (TI SCI) reset driver"
-	depends on DM_RESET && TI_SCI_PROTOCOL
+	tristate "TI System Control Interface (TI-SCI) reset driver"
+	depends on TI_SCI_PROTOCOL
 	help
 	  This enables the reset driver support over TI System Control Interface
 	  available on some new TI's SoCs. If you wish to use reset resources
 	  managed by the TI System Controller, say Y here. Otherwise, say N.
 
-config RESET_BCM6345
-	bool "Reset controller driver for BCM6345"
-	depends on DM_RESET && ARCH_BMIPS
+config RESET_TI_SYSCON
+	tristate "TI SYSCON Reset Driver"
+	depends on HAS_IOMEM
+	select MFD_SYSCON
 	help
-	  Support reset controller on BCM6345.
+	  This enables the reset driver support for TI devices with
+	  memory-mapped reset registers as part of a syscon device node. If
+	  you wish to use the reset framework for such memory-mapped devices,
+	  say Y here. Otherwise, say N.
 
 config RESET_UNIPHIER
-	bool "Reset controller driver for UniPhier SoCs"
-	depends on ARCH_UNIPHIER
-	default y
+	tristate "Reset controller driver for UniPhier SoCs"
+	depends on ARCH_UNIPHIER || COMPILE_TEST
+	depends on OF && MFD_SYSCON
+	default ARCH_UNIPHIER
 	help
 	  Support for reset controllers on UniPhier SoCs.
 	  Say Y if you want to control reset signals provided by System Control
 	  block, Media I/O block, Peripheral Block.
 
-config AST2500_RESET
-	bool "Reset controller driver for AST2500 SoCs"
-	depends on DM_RESET && WDT_ASPEED
-	default y if ASPEED_AST2500
+config RESET_ZX2967
+	bool "ZTE ZX2967 Reset Driver"
+	depends on ARCH_ZX || COMPILE_TEST
 	help
-	  Support for reset controller on AST2500 SoC. This controller uses
-	  watchdog to reset different peripherals and thus only supports
-	  resets that are supported by watchdog. The main limitation though
-	  is that some reset signals, like I2C or MISC reset multiple devices.
+	  This enables the reset controller driver for ZTE's zx2967 family.
 
-config RESET_ROCKCHIP
-	bool "Reset controller driver for Rockchip SoCs"
-	depends on DM_RESET && ARCH_ROCKCHIP && CLK
-	default y
+config RESET_ZYNQ
+	bool "ZYNQ Reset Driver" if COMPILE_TEST
+	default ARCH_ZYNQ
 	help
-	  Support for reset controller on rockchip SoC. The main limitation
-	  though is that some reset signals, like I2C or MISC reset multiple
-	  devices.
+	  This enables the reset controller driver for Xilinx Zynq SoCs.
 
-config RESET_HSDK
-	bool "Synopsys HSDK Reset Driver"
-	depends on DM_RESET && TARGET_HSDK
-	default y
-	help
-	  This enables the reset controller driver for HSDK board.
+source "drivers/reset/sti/Kconfig"
+source "drivers/reset/hisilicon/Kconfig"
+source "drivers/reset/tegra/Kconfig"
 
-config RESET_MESON
-	bool "Reset controller driver for Amlogic Meson SoCs"
-	depends on DM_RESET && ARCH_MESON
-	imply REGMAP
-	default y
-	help
-	  Support for reset controller on Amlogic Meson SoC.
-
-config RESET_SOCFPGA
-	bool "Reset controller driver for SoCFPGA"
-	depends on DM_RESET && ARCH_SOCFPGA
-	default y
-	help
-	  Support for reset controller on SoCFPGA platform.
-
-config RESET_MEDIATEK
-	bool "Reset controller driver for MediaTek SoCs"
-	depends on DM_RESET && ARCH_MEDIATEK && CLK
-	default y
-	help
-	  Support for reset controller on MediaTek SoCs.
-
-config RESET_MTMIPS
-	bool "Reset controller driver for MediaTek MIPS platform"
-	depends on DM_RESET && ARCH_MTMIPS
-	default y
-	help
-	  Support for reset controller on MediaTek MIPS platform.
-
-config RESET_SUNXI
-	bool "RESET support for Allwinner SoCs"
-	depends on DM_RESET && ARCH_SUNXI
-	default y
-	help
-	  This enables support for common reset driver for
-	  Allwinner SoCs.
-
-config RESET_HISILICON
-	bool "Reset controller driver for HiSilicon SoCs"
-	depends on DM_RESET
-	help
-	  Support for reset controller on HiSilicon SoCs.
-
-config RESET_IMX7
-	bool "i.MX7/8 Reset Driver"
-	depends on DM_RESET && (ARCH_MX7 || ARCH_IMX8M)
-	default y
-	help
-	  Support for reset controller on i.MX7/8 SoCs.
-
-endmenu
+endif

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) 2003 Bernardo Innocenti <bernie@develer.com>
  *
@@ -9,7 +10,7 @@
  * Generic C version of 64bit/32bit division and modulo, with
  * 64bit result and 32bit remainder.
  *
- * The fast case for (n>>32 == 0) is handled inline by do_div().
+ * The fast case for (n>>32 == 0) is handled inline by do_div(). 
  *
  * Code generated for this function might be very inefficient
  * for some CPUs. __div64_32() can be overridden by linking arch-specific
@@ -17,7 +18,7 @@
  * or by defining a preprocessor macro in arch/include/asm/div64.h.
  */
 
-#include <linux/compat.h>
+#include <linux/export.h>
 #include <linux/kernel.h>
 #include <linux/math64.h>
 
@@ -25,25 +26,19 @@
 #if BITS_PER_LONG == 32
 
 #ifndef __div64_32
-/*
- * Don't instrument this function as it may be called from tracing code, since
- * it needs to read the timer and this often requires calling do_div(), which
- * calls this function.
- */
-uint32_t __attribute__((weak, no_instrument_function)) __div64_32(u64 *n,
-								  u32 base)
+uint32_t __attribute__((weak)) __div64_32(uint64_t *n, uint32_t base)
 {
-	u64 rem = *n;
-	u64 b = base;
-	u64 res, d = 1;
-	u32 high = rem >> 32;
+	uint64_t rem = *n;
+	uint64_t b = base;
+	uint64_t res, d = 1;
+	uint32_t high = rem >> 32;
 
 	/* Reduce the thing a bit first */
 	res = 0;
 	if (high >= base) {
 		high /= base;
-		res = (u64)high << 32;
-		rem -= (u64)(high * base) << 32;
+		res = (uint64_t) high << 32;
+		rem -= (uint64_t) (high*base) << 32;
 	}
 
 	while ((int64_t)b > 0 && b < rem) {
@@ -108,7 +103,7 @@ u64 div64_u64_rem(u64 dividend, u64 divisor, u64 *remainder)
 		quot = div_u64_rem(dividend, divisor, &rem32);
 		*remainder = rem32;
 	} else {
-		int n = 1 + fls(high);
+		int n = fls(high);
 		quot = div_u64(dividend >> n, divisor >> n);
 
 		if (quot != 0)
@@ -146,7 +141,7 @@ u64 div64_u64(u64 dividend, u64 divisor)
 	if (high == 0) {
 		quot = div_u64(dividend, divisor);
 	} else {
-		int n = 1 + fls(high);
+		int n = fls(high);
 		quot = div_u64(dividend >> n, divisor >> n);
 
 		if (quot != 0)

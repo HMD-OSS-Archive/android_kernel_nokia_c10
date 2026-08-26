@@ -1,5 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /*
+ * This file is subject to the terms and conditions of the GNU General Public
+ * License.  See the file "COPYING" in the main directory of this archive
+ * for more details.
+ *
  * Copyright (C) 1994, 1995 Waldorf GmbH
  * Copyright (C) 1994 - 2000, 06 Ralf Baechle
  * Copyright (C) 1999, 2000 Silicon Graphics, Inc.
@@ -9,20 +12,29 @@
 #ifndef _ASM_IO_H
 #define _ASM_IO_H
 
-#include <linux/bug.h>
 #include <linux/compiler.h>
+#include <linux/kernel.h>
 #include <linux/types.h>
+#include <linux/irqflags.h>
 
 #include <asm/addrspace.h>
+#include <asm/bug.h>
 #include <asm/byteorder.h>
+#include <asm/cpu.h>
 #include <asm/cpu-features.h>
+#include <asm-generic/iomap.h>
+#include <asm/page.h>
 #include <asm/pgtable-bits.h>
 #include <asm/processor.h>
 #include <asm/string.h>
 
 #include <ioremap.h>
 #include <mangle-port.h>
-#include <spaces.h>
+
+/*
+ * Slowdown I/O port space accesses for antique hardware.
+ */
+#undef CONF_SLOWDOWN_IO
 
 /*
  * Raw operations are never swapped in software.  OTOH values that raw
@@ -40,36 +52,47 @@
 
 #define IO_SPACE_LIMIT 0xffff
 
-#ifdef CONFIG_DYNAMIC_IO_PORT_BASE
-
-static inline ulong mips_io_port_base(void)
-{
-	DECLARE_GLOBAL_DATA_PTR;
-
-	return gd->arch.io_port_base;
-}
-
-static inline void set_io_port_base(unsigned long base)
-{
-	DECLARE_GLOBAL_DATA_PTR;
-
-	gd->arch.io_port_base = base;
-	barrier();
-}
-
-#else /* !CONFIG_DYNAMIC_IO_PORT_BASE */
-
-static inline ulong mips_io_port_base(void)
-{
-	return 0;
-}
+/*
+ * On MIPS I/O ports are memory mapped, so we access them using normal
+ * load/store instructions. mips_io_port_base is the virtual address to
+ * which all ports are being mapped.  For sake of efficiency some code
+ * assumes that this is an address that can be loaded with a single lui
+ * instruction, so the lower 16 bits must be zero.  Should be true on
+ * on any sane architecture; generic code does not use this assumption.
+ */
+extern unsigned long mips_io_port_base;
 
 static inline void set_io_port_base(unsigned long base)
 {
-	BUG_ON(base);
+	mips_io_port_base = base;
 }
 
-#endif /* !CONFIG_DYNAMIC_IO_PORT_BASE */
+/*
+ * Thanks to James van Artsdalen for a better timing-fix than
+ * the two short jumps: using outb's to a nonexistent port seems
+ * to guarantee better timings even on fast machines.
+ *
+ * On the other hand, I'd like to be sure of a non-existent port:
+ * I feel a bit unsafe about using 0x80 (should be safe, though)
+ *
+ *		Linus
+ *
+ */
+
+#define __SLOW_DOWN_IO \
+	__asm__ __volatile__( \
+		"sb\t$0,0x80(%0)" \
+		: : "r" (mips_io_port_base));
+
+#ifdef CONF_SLOWDOWN_IO
+#ifdef REALLY_SLOW_IO
+#define SLOW_DOWN_IO { __SLOW_DOWN_IO; __SLOW_DOWN_IO; __SLOW_DOWN_IO; __SLOW_DOWN_IO; }
+#else
+#define SLOW_DOWN_IO __SLOW_DOWN_IO
+#endif
+#else
+#define SLOW_DOWN_IO
+#endif
 
 /*
  *     virt_to_phys    -       map virtual addresses to physical
@@ -85,16 +108,8 @@ static inline void set_io_port_base(unsigned long base)
  */
 static inline unsigned long virt_to_phys(volatile const void *address)
 {
-	unsigned long addr = (unsigned long)address;
-
-	/* this corresponds to kernel implementation of __pa() */
-#ifdef CONFIG_64BIT
-	if (addr < CKSEG0)
-		return XPHYSADDR(addr);
-#endif
-	return CPHYSADDR(addr);
+	return __pa(address);
 }
-#define virt_to_phys virt_to_phys
 
 /*
  *     phys_to_virt    -       map physical address to virtual
@@ -108,23 +123,22 @@ static inline unsigned long virt_to_phys(volatile const void *address)
  *     almost all conceivable cases a device driver should not be using
  *     this function
  */
-static inline void *phys_to_virt(unsigned long address)
+static inline void * phys_to_virt(unsigned long address)
 {
 	return (void *)(address + PAGE_OFFSET - PHYS_OFFSET);
 }
-#define phys_to_virt phys_to_virt
 
 /*
  * ISA I/O bus memory addresses are 1:1 with the physical address.
  */
 static inline unsigned long isa_virt_to_bus(volatile void *address)
 {
-	return (unsigned long)address - PAGE_OFFSET;
+	return virt_to_phys(address);
 }
 
 static inline void *isa_bus_to_virt(unsigned long address)
 {
-	return (void *)(address + PAGE_OFFSET);
+	return phys_to_virt(address);
 }
 
 #define isa_page_to_bus page_to_phys
@@ -138,18 +152,63 @@ static inline void *isa_bus_to_virt(unsigned long address)
 #define virt_to_bus virt_to_phys
 #define bus_to_virt phys_to_virt
 
-static inline void __iomem *__ioremap_mode(phys_addr_t offset, unsigned long size,
+/*
+ * Change "struct page" to physical address.
+ */
+#define page_to_phys(page)	((dma_addr_t)page_to_pfn(page) << PAGE_SHIFT)
+
+extern void __iomem * __ioremap(phys_addr_t offset, phys_addr_t size, unsigned long flags);
+extern void __iounmap(const volatile void __iomem *addr);
+
+#ifndef CONFIG_PCI
+struct pci_dev;
+static inline void pci_iounmap(struct pci_dev *dev, void __iomem *addr) {}
+#endif
+
+static inline void __iomem * __ioremap_mode(phys_addr_t offset, unsigned long size,
 	unsigned long flags)
 {
-	void __iomem *addr;
-	phys_addr_t phys_addr;
+	void __iomem *addr = plat_ioremap(offset, size, flags);
 
-	addr = plat_ioremap(offset, size, flags);
 	if (addr)
 		return addr;
 
-	phys_addr = fixup_bigphys_addr(offset, size);
-	return (void __iomem *)(unsigned long)CKSEG1ADDR(phys_addr);
+#define __IS_LOW512(addr) (!((phys_addr_t)(addr) & (phys_addr_t) ~0x1fffffffULL))
+
+	if (cpu_has_64bit_addresses) {
+		u64 base = UNCAC_BASE;
+
+		/*
+		 * R10000 supports a 2 bit uncached attribute therefore
+		 * UNCAC_BASE may not equal IO_BASE.
+		 */
+		if (flags == _CACHE_UNCACHED)
+			base = (u64) IO_BASE;
+		return (void __iomem *) (unsigned long) (base + offset);
+	} else if (__builtin_constant_p(offset) &&
+		   __builtin_constant_p(size) && __builtin_constant_p(flags)) {
+		phys_addr_t phys_addr, last_addr;
+
+		phys_addr = fixup_bigphys_addr(offset, size);
+
+		/* Don't allow wraparound or zero size. */
+		last_addr = phys_addr + size - 1;
+		if (!size || last_addr < phys_addr)
+			return NULL;
+
+		/*
+		 * Map uncached objects in the low 512MB of address
+		 * space using KSEG1.
+		 */
+		if (__IS_LOW512(phys_addr) && __IS_LOW512(last_addr) &&
+		    flags == _CACHE_UNCACHED)
+			return (void __iomem *)
+				(unsigned long)CKSEG1ADDR(phys_addr);
+	}
+
+	return __ioremap(offset, size, flags);
+
+#undef __IS_LOW512
 }
 
 /*
@@ -206,6 +265,7 @@ static inline void __iomem *__ioremap_mode(phys_addr_t offset, unsigned long siz
  */
 #define ioremap_cachable(offset, size)					\
 	__ioremap_mode((offset), (size), _page_cachable_default)
+#define ioremap_cache ioremap_cachable
 
 /*
  * These two are MIPS specific ioremap variant.	 ioremap_cacheable_cow
@@ -220,13 +280,24 @@ static inline void __iomem *__ioremap_mode(phys_addr_t offset, unsigned long siz
 
 static inline void iounmap(const volatile void __iomem *addr)
 {
-	plat_iounmap(addr);
+	if (plat_iounmap(addr))
+		return;
+
+#define __IS_KSEG1(addr) (((unsigned long)(addr) & ~0x1fffffffUL) == CKSEG1)
+
+	if (cpu_has_64bit_addresses ||
+	    (__builtin_constant_p(addr) && __IS_KSEG1(addr)))
+		return;
+
+	__iounmap(addr);
+
+#undef __IS_KSEG1
 }
 
-#ifdef CONFIG_CPU_CAVIUM_OCTEON
-#define war_octeon_io_reorder_wmb()		wmb()
+#if defined(CONFIG_CPU_CAVIUM_OCTEON) || defined(CONFIG_LOONGSON3_ENHANCEMENT)
+#define war_io_reorder_wmb()		wmb()
 #else
-#define war_octeon_io_reorder_wmb()		do { } while (0)
+#define war_io_reorder_wmb()		barrier()
 #endif
 
 #define __BUILD_MEMORY_SINGLE(pfx, bwlq, type, irq)			\
@@ -237,7 +308,7 @@ static inline void pfx##write##bwlq(type val,				\
 	volatile type *__mem;						\
 	type __val;							\
 									\
-	war_octeon_io_reorder_wmb();					\
+	war_io_reorder_wmb();					\
 									\
 	__mem = (void *)__swizzle_addr_##bwlq((unsigned long)(mem));	\
 									\
@@ -246,8 +317,11 @@ static inline void pfx##write##bwlq(type val,				\
 	if (sizeof(type) != sizeof(u64) || sizeof(u64) == sizeof(long)) \
 		*__mem = __val;						\
 	else if (cpu_has_64bits) {					\
+		unsigned long __flags;					\
 		type __tmp;						\
 									\
+		if (irq)						\
+			local_irq_save(__flags);			\
 		__asm__ __volatile__(					\
 			".set	arch=r4000"	"\t\t# __writeq""\n\t"	\
 			"dsll32 %L0, %L0, 0"			"\n\t"	\
@@ -258,6 +332,8 @@ static inline void pfx##write##bwlq(type val,				\
 			".set	mips0"				"\n"	\
 			: "=r" (__tmp)					\
 			: "0" (__val), "m" (*__mem));			\
+		if (irq)						\
+			local_irq_restore(__flags);			\
 	} else								\
 		BUG();							\
 }									\
@@ -272,6 +348,10 @@ static inline type pfx##read##bwlq(const volatile void __iomem *mem)	\
 	if (sizeof(type) != sizeof(u64) || sizeof(u64) == sizeof(long)) \
 		__val = *__mem;						\
 	else if (cpu_has_64bits) {					\
+		unsigned long __flags;					\
+									\
+		if (irq)						\
+			local_irq_save(__flags);			\
 		__asm__ __volatile__(					\
 			".set	arch=r4000"	"\t\t# __readq" "\n\t"	\
 			"ld	%L0, %1"			"\n\t"	\
@@ -280,24 +360,28 @@ static inline type pfx##read##bwlq(const volatile void __iomem *mem)	\
 			".set	mips0"				"\n"	\
 			: "=r" (__val)					\
 			: "m" (*__mem));				\
+		if (irq)						\
+			local_irq_restore(__flags);			\
 	} else {							\
 		__val = 0;						\
 		BUG();							\
 	}								\
 									\
+	/* prevent prefetching of coherent DMA data prematurely */	\
+	rmb();								\
 	return pfx##ioswab##bwlq(__mem, __val);				\
 }
 
-#define __BUILD_IOPORT_SINGLE(pfx, bwlq, type, p)			\
+#define __BUILD_IOPORT_SINGLE(pfx, bwlq, type, p, slow)			\
 									\
 static inline void pfx##out##bwlq##p(type val, unsigned long port)	\
 {									\
 	volatile type *__addr;						\
 	type __val;							\
 									\
-	war_octeon_io_reorder_wmb();					\
+	war_io_reorder_wmb();					\
 									\
-	__addr = (void *)__swizzle_addr_##bwlq(mips_io_port_base() + port); \
+	__addr = (void *)__swizzle_addr_##bwlq(mips_io_port_base + port); \
 									\
 	__val = pfx##ioswab##bwlq(__addr, val);				\
 									\
@@ -305,6 +389,7 @@ static inline void pfx##out##bwlq##p(type val, unsigned long port)	\
 	BUILD_BUG_ON(sizeof(type) > sizeof(unsigned long));		\
 									\
 	*__addr = __val;						\
+	slow;								\
 }									\
 									\
 static inline type pfx##in##bwlq##p(unsigned long port)			\
@@ -312,12 +397,15 @@ static inline type pfx##in##bwlq##p(unsigned long port)			\
 	volatile type *__addr;						\
 	type __val;							\
 									\
-	__addr = (void *)__swizzle_addr_##bwlq(mips_io_port_base() + port); \
+	__addr = (void *)__swizzle_addr_##bwlq(mips_io_port_base + port); \
 									\
 	BUILD_BUG_ON(sizeof(type) > sizeof(unsigned long));		\
 									\
 	__val = *__addr;						\
+	slow;								\
 									\
+	/* prevent prefetching of coherent DMA data prematurely */	\
+	rmb();								\
 	return pfx##ioswab##bwlq(__addr, __val);			\
 }
 
@@ -337,8 +425,8 @@ BUILDIO_MEM(l, u32)
 BUILDIO_MEM(q, u64)
 
 #define __BUILD_IOPORT_PFX(bus, bwlq, type)				\
-	__BUILD_IOPORT_SINGLE(bus, bwlq, type, )			\
-	__BUILD_IOPORT_SINGLE(bus, bwlq, type, _p)
+	__BUILD_IOPORT_SINGLE(bus, bwlq, type, ,)			\
+	__BUILD_IOPORT_SINGLE(bus, bwlq, type, _p, SLOW_DOWN_IO)
 
 #define BUILDIO_IOPORT(bwlq, type)					\
 	__BUILD_IOPORT_PFX(, bwlq, type)				\
@@ -461,16 +549,57 @@ BUILDSTRING(q, u64)
 
 static inline void memset_io(volatile void __iomem *addr, unsigned char val, int count)
 {
-	memset((void __force *)addr, val, count);
+	memset((void __force *) addr, val, count);
 }
 static inline void memcpy_fromio(void *dst, const volatile void __iomem *src, int count)
 {
-	memcpy(dst, (void __force *)src, count);
+	memcpy(dst, (void __force *) src, count);
 }
 static inline void memcpy_toio(volatile void __iomem *dst, const void *src, int count)
 {
-	memcpy((void __force *)dst, src, count);
+	memcpy((void __force *) dst, src, count);
 }
+
+/*
+ * The caches on some architectures aren't dma-coherent and have need to
+ * handle this in software.  There are three types of operations that
+ * can be applied to dma buffers.
+ *
+ *  - dma_cache_wback_inv(start, size) makes caches and coherent by
+ *    writing the content of the caches back to memory, if necessary.
+ *    The function also invalidates the affected part of the caches as
+ *    necessary before DMA transfers from outside to memory.
+ *  - dma_cache_wback(start, size) makes caches and coherent by
+ *    writing the content of the caches back to memory, if necessary.
+ *    The function also invalidates the affected part of the caches as
+ *    necessary before DMA transfers from outside to memory.
+ *  - dma_cache_inv(start, size) invalidates the affected parts of the
+ *    caches.  Dirty lines of the caches may be written back or simply
+ *    be discarded.  This operation is necessary before dma operations
+ *    to the memory.
+ *
+ * This API used to be exported; it now is for arch code internal use only.
+ */
+#if defined(CONFIG_DMA_NONCOHERENT) || defined(CONFIG_DMA_MAYBE_COHERENT)
+
+extern void (*_dma_cache_wback_inv)(unsigned long start, unsigned long size);
+extern void (*_dma_cache_wback)(unsigned long start, unsigned long size);
+extern void (*_dma_cache_inv)(unsigned long start, unsigned long size);
+
+#define dma_cache_wback_inv(start, size)	_dma_cache_wback_inv(start, size)
+#define dma_cache_wback(start, size)		_dma_cache_wback(start, size)
+#define dma_cache_inv(start, size)		_dma_cache_inv(start, size)
+
+#else /* Sane hardware */
+
+#define dma_cache_wback_inv(start,size) \
+	do { (void) (start); (void) (size); } while (0)
+#define dma_cache_wback(start,size)	\
+	do { (void) (start); (void) (size); } while (0)
+#define dma_cache_inv(start,size)	\
+	do { (void) (start); (void) (size); } while (0)
+
+#endif /* CONFIG_DMA_NONCOHERENT || CONFIG_DMA_MAYBE_COHERENT */
 
 /*
  * Read a 32-bit register that requires a 64-bit read cycle on the bus.
@@ -487,99 +616,16 @@ static inline void memcpy_toio(volatile void __iomem *dst, const void *src, int 
 #define csr_in32(a)    (*(volatile u32 *)((unsigned long)(a) + __CSR_32_ADJUST))
 
 /*
- * U-Boot specific
+ * Convert a physical pointer to a virtual kernel pointer for /dev/mem
+ * access
  */
-#define sync()		mmiowb()
+#define xlate_dev_mem_ptr(p)	__va(p)
 
-#define MAP_NOCACHE	1
+/*
+ * Convert a virtual cached pointer to an uncached pointer
+ */
+#define xlate_dev_kmem_ptr(p)	p
 
-static inline void *
-map_physmem(phys_addr_t paddr, unsigned long len, unsigned long flags)
-{
-	if (flags == MAP_NOCACHE)
-		return ioremap(paddr, len);
-
-	return (void *)CKSEG0ADDR(paddr);
-}
-#define map_physmem map_physmem
-
-#define __BUILD_CLRBITS(bwlq, sfx, end, type)				\
-									\
-static inline void clrbits_##sfx(volatile void __iomem *mem, type clr)	\
-{									\
-	type __val = __raw_read##bwlq(mem);				\
-	__val = end##_to_cpu(__val);					\
-	__val &= ~clr;							\
-	__val = cpu_to_##end(__val);					\
-	__raw_write##bwlq(__val, mem);					\
-}
-
-#define __BUILD_SETBITS(bwlq, sfx, end, type)				\
-									\
-static inline void setbits_##sfx(volatile void __iomem *mem, type set)	\
-{									\
-	type __val = __raw_read##bwlq(mem);				\
-	__val = end##_to_cpu(__val);					\
-	__val |= set;							\
-	__val = cpu_to_##end(__val);					\
-	__raw_write##bwlq(__val, mem);					\
-}
-
-#define __BUILD_CLRSETBITS(bwlq, sfx, end, type)			\
-									\
-static inline void clrsetbits_##sfx(volatile void __iomem *mem,		\
-					type clr, type set)		\
-{									\
-	type __val = __raw_read##bwlq(mem);				\
-	__val = end##_to_cpu(__val);					\
-	__val &= ~clr;							\
-	__val |= set;							\
-	__val = cpu_to_##end(__val);					\
-	__raw_write##bwlq(__val, mem);					\
-}
-
-#define BUILD_CLRSETBITS(bwlq, sfx, end, type)				\
-									\
-__BUILD_CLRBITS(bwlq, sfx, end, type)					\
-__BUILD_SETBITS(bwlq, sfx, end, type)					\
-__BUILD_CLRSETBITS(bwlq, sfx, end, type)
-
-#define __to_cpu(v)		(v)
-#define cpu_to__(v)		(v)
-
-#define out_arch(type, endian, a, v)	__raw_write##type(cpu_to_##endian(v),a)
-#define in_arch(type, endian, a)	endian##_to_cpu(__raw_read##type(a))
-
-#define out_le64(a, v)	out_arch(q, le64, a, v)
-#define out_le32(a, v)	out_arch(l, le32, a, v)
-#define out_le16(a, v)	out_arch(w, le16, a, v)
-
-#define in_le64(a)	in_arch(q, le64, a)
-#define in_le32(a)	in_arch(l, le32, a)
-#define in_le16(a)	in_arch(w, le16, a)
-
-#define out_be64(a, v)	out_arch(q, be64, a, v)
-#define out_be32(a, v)	out_arch(l, be32, a, v)
-#define out_be16(a, v)	out_arch(w, be16, a, v)
-
-#define in_be64(a)	in_arch(q, be64, a)
-#define in_be32(a)	in_arch(l, be32, a)
-#define in_be16(a)	in_arch(w, be16, a)
-
-#define out_8(a, v)	__raw_writeb(v, a)
-#define in_8(a)		__raw_readb(a)
-
-BUILD_CLRSETBITS(b, 8, _, u8)
-BUILD_CLRSETBITS(w, le16, le16, u16)
-BUILD_CLRSETBITS(w, be16, be16, u16)
-BUILD_CLRSETBITS(w, 16, _, u16)
-BUILD_CLRSETBITS(l, le32, le32, u32)
-BUILD_CLRSETBITS(l, be32, be32, u32)
-BUILD_CLRSETBITS(l, 32, _, u32)
-BUILD_CLRSETBITS(q, le64, le64, u64)
-BUILD_CLRSETBITS(q, be64, be64, u64)
-BUILD_CLRSETBITS(q, 64, _, u64)
-
-#include <asm-generic/io.h>
+void __ioread64_copy(void *to, const void __iomem *from, size_t count);
 
 #endif /* _ASM_IO_H */

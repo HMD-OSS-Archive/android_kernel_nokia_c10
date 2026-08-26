@@ -1,9 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef _LINUX_MATH64_H
 #define _LINUX_MATH64_H
 
-#include <div64.h>
-#include <linux/bitops.h>
 #include <linux/types.h>
+#include <asm/div64.h>
 
 #if BITS_PER_LONG == 64
 
@@ -253,5 +253,8 @@ static inline u64 mul_u64_u32_div(u64 a, u32 mul, u32 divisor)
 	return rl.ll;
 }
 #endif /* mul_u64_u32_div */
+
+#define DIV64_U64_ROUND_UP(ll, d)	\
+	({ u64 _tmp = (d); div64_u64((ll) + _tmp - 1, _tmp); })
 
 #endif /* _LINUX_MATH64_H */

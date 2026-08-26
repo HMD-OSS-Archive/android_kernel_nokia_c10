@@ -1,44 +1,58 @@
-# SPDX-License-Identifier: GPL-2.0+
+# SPDX-License-Identifier: GPL-2.0
 #
-# (C) Copyright 2000-2007
-# Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+# Makefile for the PCI bus specific drivers.
+#
 
-ifneq ($(CONFIG_DM_PCI),)
-obj-$(CONFIG_DM_VIDEO) += pci_rom.o
-obj-$(CONFIG_PCI) += pci-uclass.o pci_auto.o
-obj-$(CONFIG_DM_PCI_COMPAT) += pci_compat.o
-obj-$(CONFIG_PCI_SANDBOX) += pci_sandbox.o
-obj-$(CONFIG_SANDBOX) += pci-emul-uclass.o
-obj-$(CONFIG_X86) += pci_x86.o pci_rom.o
-else
-obj-$(CONFIG_PCI) += pci.o pci_auto_old.o
+obj-y		+= access.o bus.o probe.o host-bridge.o remove.o pci.o \
+			pci-driver.o search.o pci-sysfs.o rom.o setup-res.o \
+			irq.o vpd.o setup-bus.o vc.o mmap.o setup-irq.o
+
+obj-$(CONFIG_PROC_FS) += proc.o
+obj-$(CONFIG_SYSFS) += slot.o
+
+obj-$(CONFIG_PCI_QUIRKS) += quirks.o
+
+# Build PCI Express stuff if needed
+obj-$(CONFIG_PCIEPORTBUS)	+= pcie/
+# Build the PCI Hotplug drivers if we were asked to
+obj-$(CONFIG_HOTPLUG_PCI) += hotplug/
+ifdef CONFIG_HOTPLUG_PCI
+obj-y += hotplug-pci.o
 endif
-obj-$(CONFIG_PCI) += pci_auto_common.o pci_common.o
 
-obj-$(CONFIG_PCIE_ECAM_GENERIC) += pcie_ecam_generic.o
-obj-$(CONFIG_FSL_PCI_INIT) += fsl_pci_init.o
-obj-$(CONFIG_PCI_INDIRECT_BRIDGE) += pci_indirect.o
-obj-$(CONFIG_PCI_GT64120) += pci_gt64120.o
-obj-$(CONFIG_PCI_MPC85XX) += pci_mpc85xx.o
-obj-$(CONFIG_PCI_MSC01) += pci_msc01.o
-obj-$(CONFIG_PCIE_IMX) += pcie_imx.o
-obj-$(CONFIG_FTPCI100) += pci_ftpci100.o
-obj-$(CONFIG_PCI_MVEBU) += pci_mvebu.o
-obj-$(CONFIG_PCI_RCAR_GEN2) += pci-rcar-gen2.o
-obj-$(CONFIG_PCI_RCAR_GEN3) += pci-rcar-gen3.o
-obj-$(CONFIG_SH4_PCI) += pci_sh4.o
-obj-$(CONFIG_SH7751_PCI) +=pci_sh7751.o
-obj-$(CONFIG_SH7780_PCI) +=pci_sh7780.o
-obj-$(CONFIG_PCI_TEGRA) += pci_tegra.o
-obj-$(CONFIG_PCI_AARDVARK) += pci-aardvark.o
-obj-$(CONFIG_PCIE_DW_MVEBU) += pcie_dw_mvebu.o
-obj-$(CONFIG_PCIE_FSL) += pcie_fsl.o pcie_fsl_fixup.o
-obj-$(CONFIG_PCIE_LAYERSCAPE) += pcie_layerscape.o
-obj-$(CONFIG_PCIE_LAYERSCAPE) += pcie_layerscape_fixup.o
-obj-$(CONFIG_PCIE_LAYERSCAPE_GEN4) += pcie_layerscape_gen4.o \
-				pcie_layerscape_gen4_fixup.o
-obj-$(CONFIG_PCI_XILINX) += pcie_xilinx.o
-obj-$(CONFIG_PCI_PHYTIUM) += pcie_phytium.o
-obj-$(CONFIG_PCIE_INTEL_FPGA) += pcie_intel_fpga.o
-obj-$(CONFIG_PCI_KEYSTONE) += pcie_dw_ti.o
-obj-$(CONFIG_PCIE_MEDIATEK) += pcie_mediatek.o
+# Build the PCI MSI interrupt support
+obj-$(CONFIG_PCI_MSI) += msi.o
+
+# Build the Hypertransport interrupt support
+obj-$(CONFIG_HT_IRQ) += htirq.o
+
+obj-$(CONFIG_PCI_ATS) += ats.o
+obj-$(CONFIG_PCI_IOV) += iov.o
+
+#
+# ACPI Related PCI FW Functions
+# ACPI _DSM provided firmware instance and string name
+#
+obj-$(CONFIG_ACPI)    += pci-acpi.o
+
+# SMBIOS provided firmware instance and labels
+obj-$(CONFIG_PCI_LABEL) += pci-label.o
+
+# Intel MID platform PM support
+obj-$(CONFIG_X86_INTEL_MID) += pci-mid.o
+
+obj-$(CONFIG_PCI_SYSCALL) += syscall.o
+
+obj-$(CONFIG_PCI_STUB) += pci-stub.o
+
+obj-$(CONFIG_PCI_ECAM) += ecam.o
+
+obj-$(CONFIG_XEN_PCIDEV_FRONTEND) += xen-pcifront.o
+
+obj-$(CONFIG_OF) += of.o
+
+ccflags-$(CONFIG_PCI_DEBUG) := -DDEBUG
+
+# PCI host controller drivers
+obj-y += host/
+obj-y += switch/

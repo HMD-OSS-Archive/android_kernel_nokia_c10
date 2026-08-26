@@ -1,30 +1,23 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
 /*
- *  Copyright (C) 1997 Tensilica Inc.
+ * include/asm-xtensa/types.h
+ *
+ * This file is subject to the terms and conditions of the GNU General Public
+ * License.  See the file "COPYING" in the main directory of this archive
+ * for more details.
+ *
+ * Copyright (C) 2001 - 2005 Tensilica Inc.
  */
-
 #ifndef _XTENSA_TYPES_H
 #define _XTENSA_TYPES_H
 
-#include <asm-generic/int-ll64.h>
+#include <uapi/asm/types.h>
 
-typedef unsigned short umode_t;
-
+#ifndef __ASSEMBLY__
 /*
  * These aren't exported outside the kernel to avoid name space clashes
  */
-#ifdef __KERNEL__
 
 #define BITS_PER_LONG 32
 
-/* Dma addresses are 32-bits wide */
-
-typedef u32 dma_addr_t;
-
-typedef unsigned long phys_addr_t;
-typedef unsigned long phys_size_t;
-
-
-#endif /* __KERNEL__ */
-
-#endif /* _XTENSA_TYPES_H */
+#endif
+#endif	/* _XTENSA_TYPES_H */

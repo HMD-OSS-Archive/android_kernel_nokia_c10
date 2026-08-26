@@ -1,7 +1,17 @@
-// SPDX-License-Identifier: (GPL-2.0 or BSD-3-Clause-Clear)
 /**
  * Copyright (c) 2016-present, Yann Collet, Facebook, Inc.
  * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of https://github.com/facebook/zstd.
+ * An additional grant of patent rights can be found in the PATENTS file in the
+ * same directory.
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License version 2 as published by the
+ * Free Software Foundation. This program is dual-licensed; you may select
+ * either version 2 of the GNU General Public License ("GPL") or BSD license
+ * ("BSD").
  */
 
 /* ***************************************************************
@@ -24,7 +34,7 @@
 #include "mem.h" /* low level memory routines */
 #include "zstd_internal.h"
 #include <linux/kernel.h>
-#include <linux/compat.h>
+#include <linux/module.h>
 #include <linux/string.h> /* memcpy, memmove, memset */
 
 #define ZSTD_PREFETCH(ptr) __builtin_prefetch(ptr, 0, 0)
@@ -2513,3 +2523,6 @@ EXPORT_SYMBOL(ZSTD_nextInputType);
 
 EXPORT_SYMBOL(ZSTD_decompressBlock);
 EXPORT_SYMBOL(ZSTD_insertBlock);
+
+MODULE_LICENSE("Dual BSD/GPL");
+MODULE_DESCRIPTION("Zstd Decompressor");

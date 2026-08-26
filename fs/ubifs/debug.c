@@ -1,8 +1,20 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * This file is part of UBIFS.
  *
  * Copyright (C) 2006-2008 Nokia Corporation
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published by
+ * the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  *
  * Authors: Artem Bityutskiy (Битюцкий Артём)
  *          Adrian Hunter
@@ -15,23 +27,15 @@
  * various local functions of those subsystems.
  */
 
-#include <hexdump.h>
-
-#ifndef __UBOOT__
 #include <linux/module.h>
 #include <linux/debugfs.h>
 #include <linux/math64.h>
 #include <linux/uaccess.h>
 #include <linux/random.h>
-#else
-#include <linux/compat.h>
-#include <linux/err.h>
-#endif
+#include <linux/ctype.h>
 #include "ubifs.h"
 
-#ifndef __UBOOT__
 static DEFINE_SPINLOCK(dbg_lock);
-#endif
 
 static const char *get_key_fmt(int fmt)
 {
@@ -73,7 +77,6 @@ static const char *get_key_type(int type)
 	}
 }
 
-#ifndef __UBOOT__
 static const char *get_dent_type(int type)
 {
 	switch (type) {
@@ -95,7 +98,6 @@ static const char *get_dent_type(int type)
 		return "unknown/invalid type";
 	}
 }
-#endif
 
 const char *dbg_snprintf_key(const struct ubifs_info *c,
 			     const union ubifs_key *key, char *buffer, int len)
@@ -231,9 +233,8 @@ static void dump_ch(const struct ubifs_ch *ch)
 
 void ubifs_dump_inode(struct ubifs_info *c, const struct inode *inode)
 {
-#ifndef __UBOOT__
 	const struct ubifs_inode *ui = ubifs_inode(inode);
-	struct qstr nm = { .name = NULL };
+	struct fscrypt_name nm = {0};
 	union ubifs_key key;
 	struct ubifs_dent_node *dent, *pdent = NULL;
 	int count = 2;
@@ -260,7 +261,7 @@ void ubifs_dump_inode(struct ubifs_info *c, const struct inode *inode)
 	pr_err("\txattr_names    %u\n", ui->xattr_names);
 	pr_err("\tdirty          %u\n", ui->dirty);
 	pr_err("\txattr          %u\n", ui->xattr);
-	pr_err("\tbulk_read      %u\n", ui->xattr);
+	pr_err("\tbulk_read      %u\n", ui->bulk_read);
 	pr_err("\tsynced_i_size  %llu\n",
 	       (unsigned long long)ui->synced_i_size);
 	pr_err("\tui_size        %llu\n",
@@ -286,17 +287,18 @@ void ubifs_dump_inode(struct ubifs_info *c, const struct inode *inode)
 			break;
 		}
 
-		pr_err("\t%d: %s (%s)\n",
-		       count++, dent->name, get_dent_type(dent->type));
+		pr_err("\t%d: inode %llu, type %s, len %d\n",
+		       count++, (unsigned long long) le64_to_cpu(dent->inum),
+		       get_dent_type(dent->type),
+		       le16_to_cpu(dent->nlen));
 
-		nm.name = dent->name;
-		nm.len = le16_to_cpu(dent->nlen);
+		fname_name(&nm) = dent->name;
+		fname_len(&nm) = le16_to_cpu(dent->nlen);
 		kfree(pdent);
 		pdent = dent;
 		key_read(c, &dent->key, &key);
 	}
 	kfree(pdent);
-#endif
 }
 
 void ubifs_dump_node(const struct ubifs_info *c, const void *node)
@@ -309,7 +311,7 @@ void ubifs_dump_node(const struct ubifs_info *c, const void *node)
 	/* If the magic is incorrect, just hexdump the first bytes */
 	if (le32_to_cpu(ch->magic) != UBIFS_NODE_MAGIC) {
 		pr_err("Not a node, first %zu bytes:", UBIFS_CH_SZ);
-		print_hex_dump("", DUMP_PREFIX_OFFSET, 32, 1,
+		print_hex_dump(KERN_ERR, "", DUMP_PREFIX_OFFSET, 32, 1,
 			       (void *)node, UBIFS_CH_SZ, 1);
 		return;
 	}
@@ -465,7 +467,8 @@ void ubifs_dump_node(const struct ubifs_info *c, const void *node)
 			pr_err("(bad name length, not printing, bad or corrupted node)");
 		else {
 			for (i = 0; i < nlen && dent->name[i]; i++)
-				pr_cont("%c", dent->name[i]);
+				pr_cont("%c", isprint(dent->name[i]) ?
+					dent->name[i] : '?');
 		}
 		pr_cont("\n");
 
@@ -484,7 +487,7 @@ void ubifs_dump_node(const struct ubifs_info *c, const void *node)
 		       (int)le16_to_cpu(dn->compr_type));
 		pr_err("\tdata size      %d\n", dlen);
 		pr_err("\tdata:\n");
-		print_hex_dump("\t", DUMP_PREFIX_OFFSET, 32, 1,
+		print_hex_dump(KERN_ERR, "\t", DUMP_PREFIX_OFFSET, 32, 1,
 			       (void *)&dn->data, dlen, 0);
 		break;
 	}
@@ -575,7 +578,6 @@ void ubifs_dump_lstats(const struct ubifs_lp_stats *lst)
 	spin_unlock(&dbg_lock);
 }
 
-#ifndef __UBOOT__
 void ubifs_dump_budg(struct ubifs_info *c, const struct ubifs_budg_info *bi)
 {
 	int i;
@@ -643,11 +645,6 @@ out_unlock:
 	spin_unlock(&dbg_lock);
 	spin_unlock(&c->space_lock);
 }
-#else
-void ubifs_dump_budg(struct ubifs_info *c, const struct ubifs_budg_info *bi)
-{
-}
-#endif
 
 void ubifs_dump_lprop(const struct ubifs_info *c, const struct ubifs_lprops *lp)
 {
@@ -967,7 +964,6 @@ void ubifs_dump_index(struct ubifs_info *c)
 	dbg_walk_index(c, NULL, dump_znode, NULL);
 }
 
-#ifndef __UBOOT__
 /**
  * dbg_save_space_info - save information about flash space.
  * @c: UBIFS file-system description object
@@ -1115,7 +1111,7 @@ int dbg_check_dir(struct ubifs_info *c, const struct inode *dir)
 	unsigned int nlink = 2;
 	union ubifs_key key;
 	struct ubifs_dent_node *dent, *pdent = NULL;
-	struct qstr nm = { .name = NULL };
+	struct fscrypt_name nm = {0};
 	loff_t size = UBIFS_INO_NODE_SZ;
 
 	if (!dbg_is_chk_gen(c))
@@ -1136,9 +1132,9 @@ int dbg_check_dir(struct ubifs_info *c, const struct inode *dir)
 			return err;
 		}
 
-		nm.name = dent->name;
-		nm.len = le16_to_cpu(dent->nlen);
-		size += CALC_DENT_SIZE(nm.len);
+		fname_name(&nm) = dent->name;
+		fname_len(&nm) = le16_to_cpu(dent->nlen);
+		size += CALC_DENT_SIZE(fname_len(&nm));
 		if (dent->type == UBIFS_ITYPE_DIR)
 			nlink += 1;
 		kfree(pdent);
@@ -1465,36 +1461,7 @@ out:
 	dump_stack();
 	return -EINVAL;
 }
-#else
 
-int dbg_check_dir(struct ubifs_info *c, const struct inode *dir)
-{
-	return 0;
-}
-
-void dbg_debugfs_exit_fs(struct ubifs_info *c)
-{
-	return;
-}
-
-int ubifs_debugging_init(struct ubifs_info *c)
-{
-	return 0;
-}
-void ubifs_debugging_exit(struct ubifs_info *c)
-{
-}
-int dbg_check_filesystem(struct ubifs_info *c)
-{
-	return 0;
-}
-int dbg_debugfs_init_fs(struct ubifs_info *c)
-{
-	return 0;
-}
-#endif
-
-#ifndef __UBOOT__
 /**
  * dbg_check_tnc - check TNC tree.
  * @c: UBIFS file-system description object
@@ -1581,12 +1548,6 @@ int dbg_check_tnc(struct ubifs_info *c, int extra)
 
 	return 0;
 }
-#else
-int dbg_check_tnc(struct ubifs_info *c, int extra)
-{
-	return 0;
-}
-#endif
 
 /**
  * dbg_walk_index - walk the on-flash index.
@@ -1779,7 +1740,6 @@ int dbg_check_idx_size(struct ubifs_info *c, long long idx_size)
 	return 0;
 }
 
-#ifndef __UBOOT__
 /**
  * struct fsck_inode - information about an inode used when checking the file-system.
  * @rb: link in the RB-tree of inodes
@@ -2431,8 +2391,8 @@ int dbg_check_nondata_nodes_order(struct ubifs_info *c, struct list_head *head)
 			ubifs_dump_node(c, sa->node);
 			return -EINVAL;
 		}
-		if (sa->type != UBIFS_INO_NODE && sa->type != UBIFS_DENT_NODE &&
-		    sa->type != UBIFS_XENT_NODE) {
+		if (sb->type != UBIFS_INO_NODE && sb->type != UBIFS_DENT_NODE &&
+		    sb->type != UBIFS_XENT_NODE) {
 			ubifs_err(c, "bad node type %d", sb->type);
 			ubifs_dump_node(c, sb->node);
 			return -EINVAL;
@@ -2617,7 +2577,7 @@ int dbg_leb_write(struct ubifs_info *c, int lnum, const void *buf,
 {
 	int err, failing;
 
-	if (c->dbg->pc_happened)
+	if (dbg_is_power_cut(c))
 		return -EROFS;
 
 	failing = power_cut_emulated(c, lnum, 1);
@@ -2639,7 +2599,7 @@ int dbg_leb_change(struct ubifs_info *c, int lnum, const void *buf,
 {
 	int err;
 
-	if (c->dbg->pc_happened)
+	if (dbg_is_power_cut(c))
 		return -EROFS;
 	if (power_cut_emulated(c, lnum, 1))
 		return -EROFS;
@@ -2655,7 +2615,7 @@ int dbg_leb_unmap(struct ubifs_info *c, int lnum)
 {
 	int err;
 
-	if (c->dbg->pc_happened)
+	if (dbg_is_power_cut(c))
 		return -EROFS;
 	if (power_cut_emulated(c, lnum, 0))
 		return -EROFS;
@@ -2671,7 +2631,7 @@ int dbg_leb_map(struct ubifs_info *c, int lnum)
 {
 	int err;
 
-	if (c->dbg->pc_happened)
+	if (dbg_is_power_cut(c))
 		return -EROFS;
 	if (power_cut_emulated(c, lnum, 0))
 		return -EROFS;
@@ -3146,4 +3106,3 @@ void ubifs_debugging_exit(struct ubifs_info *c)
 {
 	kfree(c->dbg);
 }
-#endif

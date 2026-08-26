@@ -1,53 +1,39 @@
-menuconfig UNIT_TEST
-	bool "Unit tests"
+#
+# KUnit base configuration
+#
+
+menu "KUnit support"
+
+config TEST
+	bool "Enable support for unit tests (KUnit)"
+	select HAS_IOMEM
 	help
-	  Select this to compile in unit tests for various parts of
-	  U-Boot. Test suites will be subcommands of the "ut" command.
-	  This does not require sandbox to be included, but it is most
-	  often used there.
+	  Enables support for kernel unit tests (KUnit), a lightweight unit
+	  testing and mocking framework for the Linux kernel. These tests are
+	  able to be run locally on a developer's workstation without a VM or
+	  special hardware. For more information, please see Documentation/test/
 
-config UT_LIB
-	bool "Unit tests for library functions"
-	depends on UNIT_TEST
-	default y
+if TEST
+
+config TEST_TEST
+	bool "KUnit test for KUnit"
+	depends on TEST
 	help
-	  Enables the 'ut lib' command which tests library functions like
-	  memcat(), memcyp(), memmove() and ASN1 compiler/decoder.
+	  Enables KUnit test to test KUnit.
 
-if UT_LIB
-
-config UT_LIB_ASN1
-	bool "Unit test for asn1 compiler and decoder function"
-	default y
-	imply ASYMMETRIC_KEY_TYPE
-	imply ASYMMETRIC_PUBLIC_KEY_SUBTYPE
-	imply X509_CERTIFICATE_PARSER
-	imply PKCS7_MESSAGE_PARSER
-	imply RSA_PUBLIC_KEY_PARSER
+config TEST_DEATH_TEST
+	bool "(Expert) KUnit death test for KUnit"
+	depends on TEST
 	help
-	  Enables a test which exercises asn1 compiler and decoder function
-	  via various parsers.
+	  Enables KUnit test to test KUnit death test feature. This test is not
+	  hermetic and can cause other tests to misbehave.
 
-endif
-
-config UT_TIME
-	bool "Unit tests for time functions"
-	depends on UNIT_TEST
+config EXAMPLE_TEST
+	bool "Example test for KUnit"
+	depends on TEST
 	help
-	  Enables the 'ut time' command which tests that the time functions
-	  work correctly. The test is fairly simple and will not catch all
-	  problems. But if you are having problems with udelay() and the like,
-	  this is a good place to start.
+	  Enables example KUnit test to demo features of KUnit.
 
-config UT_UNICODE
-	bool "Unit tests for Unicode functions"
-	depends on UNIT_TEST
-	default y
-	help
-	  Enables the 'ut unicode' command which tests that the functions for
-	  manipulating Unicode strings work correctly.
+endif # TEST
 
-source "test/dm/Kconfig"
-source "test/env/Kconfig"
-source "test/optee/Kconfig"
-source "test/overlay/Kconfig"
+endmenu

@@ -1,67 +1,54 @@
-/* SPDX-License-Identifier: GPL-2.0+ */
+/* SPDX-License-Identifier: GPL-2.0 */
+#ifndef _ASM_X86_IRQ_H
+#define _ASM_X86_IRQ_H
 /*
- * Copyright (C) 2015, Bin Meng <bmeng.cn@gmail.com>
+ *	(C) 1992, 1993 Linus Torvalds, (C) 1997 Ingo Molnar
+ *
+ *	IRQ/IPI changes taken from work by Thomas Radke
+ *	<tomsoft@informatik.tu-chemnitz.de>
  */
 
-#ifndef _ARCH_IRQ_H_
-#define _ARCH_IRQ_H_
+#include <asm/apicdef.h>
+#include <asm/irq_vectors.h>
 
-#include <dt-bindings/interrupt-router/intel-irq.h>
+static inline int irq_canonicalize(int irq)
+{
+	return ((irq == 2) ? 9 : irq);
+}
 
-/**
- * Intel interrupt router configuration mechanism
- *
- * There are two known ways of Intel interrupt router configuration mechanism
- * so far. On most cases, the IRQ routing configuraiton is controlled by PCI
- * configuraiton registers on the legacy bridge, normally PCI BDF(0, 31, 0).
- * On some newer platforms like BayTrail and Braswell, the IRQ routing is now
- * in the IBASE register block where IBASE is memory-mapped.
- */
-enum pirq_config {
-	PIRQ_VIA_PCI,
-	PIRQ_VIA_IBASE
-};
+#ifdef CONFIG_X86_32
+extern void irq_ctx_init(int cpu);
+#else
+# define irq_ctx_init(cpu) do { } while (0)
+#endif
 
-struct pirq_regmap {
-	int link;
-	int offset;
-};
+#define __ARCH_HAS_DO_SOFTIRQ
 
-/**
- * Intel interrupt router control block
- *
- * Its members' value will be filled in based on device tree's input.
- *
- * @config:	PIRQ_VIA_PCI or PIRQ_VIA_IBASE
- * @link_base:	link value base number
- * @link_num:	number of PIRQ links supported
- * @has_regmap:	has mapping table between PIRQ link and routing register offset
- * @irq_mask:	IRQ mask reprenting the 16 IRQs in 8259, bit N is 1 means
- *		IRQ N is available to be routed
- * @lb_bdf:	irq router's PCI bus/device/function number encoding
- * @ibase:	IBASE register block base address
- * @actl_8bit:	ACTL register width is 8-bit (for ICH series chipset)
- * @actl_addr:	ACTL register offset
- */
-struct irq_router {
-	int config;
-	u32 link_base;
-	int link_num;
-	bool has_regmap;
-	struct pirq_regmap *regmap;
-	u16 irq_mask;
-	u32 bdf;
-	u32 ibase;
-	bool actl_8bit;
-	int actl_addr;
-};
+struct irq_desc;
 
-struct pirq_routing {
-	int bdf;
-	int pin;
-	int pirq;
-};
+#ifdef CONFIG_HOTPLUG_CPU
+#include <linux/cpumask.h>
+extern int check_irq_vectors_for_cpu_disable(void);
+extern void fixup_irqs(void);
+#endif
 
-#define PIRQ_BITMAP		0xdef8
+#ifdef CONFIG_HAVE_KVM
+extern void kvm_set_posted_intr_wakeup_handler(void (*handler)(void));
+#endif
 
-#endif /* _ARCH_IRQ_H_ */
+extern void (*x86_platform_ipi_callback)(void);
+extern void native_init_IRQ(void);
+
+extern bool handle_irq(struct irq_desc *desc, struct pt_regs *regs);
+
+extern __visible unsigned int do_IRQ(struct pt_regs *regs);
+
+extern void init_ISA_irqs(void);
+
+#ifdef CONFIG_X86_LOCAL_APIC
+void arch_trigger_cpumask_backtrace(const struct cpumask *mask,
+				    bool exclude_self);
+#define arch_trigger_cpumask_backtrace arch_trigger_cpumask_backtrace
+#endif
+
+#endif /* _ASM_X86_IRQ_H */

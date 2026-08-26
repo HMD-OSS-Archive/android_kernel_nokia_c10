@@ -1,7 +1,7 @@
 /*
- *  linux/include/asm-arm/processor.h
+ *  arch/arm/include/asm/processor.h
  *
- *  Copyright (C) 1995-2002 Russell King
+ *  Copyright (C) 1995-1999 Russell King
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -17,84 +17,56 @@
  */
 #define current_text_addr() ({ __label__ _l; _l: &&_l;})
 
-#define FP_SIZE 35
-
-struct fp_hard_struct {
-	unsigned int save[FP_SIZE];		/* as yet undefined */
-};
-
-struct fp_soft_struct {
-	unsigned int save[FP_SIZE];		/* undefined information */
-};
-
-union fp_state {
-	struct fp_hard_struct	hard;
-	struct fp_soft_struct	soft;
-};
-
-typedef unsigned long mm_segment_t;		/* domain register	*/
-
 #ifdef __KERNEL__
 
-#define EISA_bus 0
-#define MCA_bus 0
-#define MCA_bus__is_a_macro
-
-#include <asm/atomic.h>
+#include <asm/hw_breakpoint.h>
 #include <asm/ptrace.h>
-#if 0	/* XXX###XXX */
-#include <asm/arch/memory.h>
-#endif	/* XXX###XXX */
-#include <asm/proc-armv/processor.h>
 #include <asm/types.h>
+#include <asm/unified.h>
 
-union debug_insn {
-	u32	arm;
-	u16	thumb;
-};
-
-struct debug_entry {
-	u32			address;
-	union debug_insn	insn;
-};
+#ifdef __KERNEL__
+#define STACK_TOP	((current->personality & ADDR_LIMIT_32BIT) ? \
+			 TASK_SIZE : TASK_SIZE_26)
+#define STACK_TOP_MAX	TASK_SIZE
+#endif
 
 struct debug_info {
-	int			nsaved;
-	struct debug_entry	bp[2];
+#ifdef CONFIG_HAVE_HW_BREAKPOINT
+	struct perf_event	*hbp[ARM_MAX_HBP_SLOTS];
+#endif
 };
 
 struct thread_struct {
-	atomic_t			refcount;
 							/* fault info	  */
-	unsigned long			address;
-	unsigned long			trap_no;
-	unsigned long			error_code;
-							/* floating point */
-	union fp_state			fpstate;
+	unsigned long		address;
+	unsigned long		trap_no;
+	unsigned long		error_code;
 							/* debugging	  */
-	struct debug_info		debug;
-							/* context info	  */
-	struct context_save_struct	*save;
-	EXTRA_THREAD_STRUCT
+	struct debug_info	debug;
 };
 
-#define INIT_THREAD  {					\
-	refcount:	ATOMIC_INIT(1),			\
-	EXTRA_THREAD_STRUCT_INIT			\
-}
+#define INIT_THREAD  {	}
 
-/*
- * Return saved PC of a blocked thread.
- */
-static inline unsigned long thread_saved_pc(struct thread_struct *t)
-{
-	return t->save ? pc_pointer(t->save->pc) : 0;
-}
+#ifdef CONFIG_MMU
+#define nommu_start_thread(regs) do { } while (0)
+#else
+#define nommu_start_thread(regs) regs->ARM_r10 = current->mm->start_data
+#endif
 
-static inline unsigned long thread_saved_fp(struct thread_struct *t)
-{
-	return t->save ? t->save->fp : 0;
-}
+#define start_thread(regs,pc,sp)					\
+({									\
+	memset(regs->uregs, 0, sizeof(regs->uregs));			\
+	if (current->personality & ADDR_LIMIT_32BIT)			\
+		regs->ARM_cpsr = USR_MODE;				\
+	else								\
+		regs->ARM_cpsr = USR26_MODE;				\
+	if (elf_hwcap & HWCAP_THUMB && pc & 1)				\
+		regs->ARM_cpsr |= PSR_T_BIT;				\
+	regs->ARM_cpsr |= PSR_ENDSTATE;					\
+	regs->ARM_pc = pc & ~1;		/* pc */			\
+	regs->ARM_sp = sp;		/* sp */			\
+	nommu_start_thread(regs);					\
+})
 
 /* Forward declaration, a strange C thing */
 struct task_struct;
@@ -102,32 +74,64 @@ struct task_struct;
 /* Free all resources held by a thread. */
 extern void release_thread(struct task_struct *);
 
-/* Copy and release all segment info associated with a VM */
-#define copy_segments(tsk, mm)		do { } while (0)
-#define release_segments(mm)		do { } while (0)
-
 unsigned long get_wchan(struct task_struct *p);
 
-#define THREAD_SIZE	(8192)
+#if __LINUX_ARM_ARCH__ == 6 || defined(CONFIG_ARM_ERRATA_754327)
+#define cpu_relax()						\
+	do {							\
+		smp_mb();					\
+		__asm__ __volatile__("nop; nop; nop; nop; nop; nop; nop; nop; nop; nop;");	\
+	} while (0)
+#else
+#define cpu_relax()			barrier()
+#endif
 
-extern struct task_struct *alloc_task_struct(void);
-extern void __free_task_struct(struct task_struct *);
-#define get_task_struct(p)	atomic_inc(&(p)->thread.refcount)
-#define free_task_struct(p)					\
- do {								\
-	if (atomic_dec_and_test(&(p)->thread.refcount))		\
-		__free_task_struct((p));			\
- } while (0)
+#define task_pt_regs(p) \
+	((struct pt_regs *)(THREAD_START_SP + task_stack_page(p)) - 1)
 
-#define init_task	(init_task_union.task)
-#define init_stack	(init_task_union.stack)
+#define KSTK_EIP(tsk)	task_pt_regs(tsk)->ARM_pc
+#define KSTK_ESP(tsk)	task_pt_regs(tsk)->ARM_sp
 
-#define cpu_relax()	barrier()
+#ifdef CONFIG_SMP
+#define __ALT_SMP_ASM(smp, up)						\
+	"9998:	" smp "\n"						\
+	"	.pushsection \".alt.smp.init\", \"a\"\n"		\
+	"	.long	9998b\n"					\
+	"	" up "\n"						\
+	"	.popsection\n"
+#else
+#define __ALT_SMP_ASM(smp, up)	up
+#endif
 
 /*
- * Create a new kernel thread
+ * Prefetching support - only ARMv5.
  */
-extern int arch_kernel_thread(int (*fn)(void *), void *arg, unsigned long flags);
+#if __LINUX_ARM_ARCH__ >= 5
+
+#define ARCH_HAS_PREFETCH
+static inline void prefetch(const void *ptr)
+{
+	__asm__ __volatile__(
+		"pld\t%a0"
+		:: "p" (ptr));
+}
+
+#if __LINUX_ARM_ARCH__ >= 7 && defined(CONFIG_SMP)
+#define ARCH_HAS_PREFETCHW
+static inline void prefetchw(const void *ptr)
+{
+	__asm__ __volatile__(
+		".arch_extension	mp\n"
+		__ALT_SMP_ASM(
+			WASM(pldw)		"\t%a0",
+			WASM(pld)		"\t%a0"
+		)
+		:: "p" (ptr));
+}
+#endif
+#endif
+
+#define HAVE_ARCH_PICK_MMAP_LAYOUT
 
 #endif
 

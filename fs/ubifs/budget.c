@@ -1,8 +1,20 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
  * This file is part of UBIFS.
  *
  * Copyright (C) 2006-2008 Nokia Corporation.
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published by
+ * the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+ * more details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 51
+ * Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  *
  * Authors: Adrian Hunter
  *          Artem Bityutskiy (Битюцкий Артём)
@@ -19,11 +31,7 @@
  */
 
 #include "ubifs.h"
-#ifndef __UBOOT__
 #include <linux/writeback.h>
-#else
-#include <linux/err.h>
-#endif
 #include <linux/math64.h>
 
 /*
@@ -40,7 +48,6 @@
  */
 #define NR_TO_WRITE 16
 
-#ifndef __UBOOT__
 /**
  * shrink_liability - write-back some dirty pages/inodes.
  * @c: UBIFS file-system description object
@@ -160,7 +167,6 @@ static int make_free_space(struct ubifs_info *c)
 
 	return -ENOSPC;
 }
-#endif
 
 /**
  * ubifs_calc_min_idx_lebs - calculate amount of LEBs for the index.
@@ -193,7 +199,6 @@ int ubifs_calc_min_idx_lebs(struct ubifs_info *c)
 	return idx_lebs;
 }
 
-#ifndef __UBOOT__
 /**
  * ubifs_calc_available - calculate available FS space.
  * @c: UBIFS file-system description object
@@ -608,7 +613,6 @@ void ubifs_release_dirty_inode_budget(struct ubifs_info *c,
 	req.dd_growth = c->bi.inode_budget + ALIGN(ui->data_len, 8);
 	ubifs_release_budget(c, &req);
 }
-#endif
 
 /**
  * ubifs_reported_space - calculate reported free space.
@@ -655,7 +659,6 @@ long long ubifs_reported_space(const struct ubifs_info *c, long long free)
 	return div_u64(free, divisor);
 }
 
-#ifndef __UBOOT__
 /**
  * ubifs_get_free_space_nolock - return amount of free space.
  * @c: UBIFS file-system description object
@@ -725,4 +728,3 @@ long long ubifs_get_free_space(struct ubifs_info *c)
 
 	return free;
 }
-#endif

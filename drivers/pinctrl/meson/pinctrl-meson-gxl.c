@@ -1,19 +1,132 @@
-// SPDX-License-Identifier: GPL-2.0+
 /*
- * (C) Copyright 2016 - Beniamino Galvani <b.galvani@gmail.com>
+ * Pin controller and GPIO driver for Amlogic Meson GXL.
  *
- * Based on code from Linux kernel:
- *   Copyright (C) 2016 Endless Mobile, Inc.
+ * Copyright (C) 2016 Endless Mobile, Inc.
+ * Author: Carlo Caione <carlo@endlessm.com>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * version 2 as published by the Free Software Foundation.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <common.h>
-#include <dm.h>
-#include <dm/pinctrl.h>
 #include <dt-bindings/gpio/meson-gxl-gpio.h>
+#include "pinctrl-meson.h"
 
-#include "pinctrl-meson-gx.h"
+#define EE_OFF	10
 
-#define EE_OFF	11
+static const struct pinctrl_pin_desc meson_gxl_periphs_pins[] = {
+	MESON_PIN(GPIOZ_0, EE_OFF),
+	MESON_PIN(GPIOZ_1, EE_OFF),
+	MESON_PIN(GPIOZ_2, EE_OFF),
+	MESON_PIN(GPIOZ_3, EE_OFF),
+	MESON_PIN(GPIOZ_4, EE_OFF),
+	MESON_PIN(GPIOZ_5, EE_OFF),
+	MESON_PIN(GPIOZ_6, EE_OFF),
+	MESON_PIN(GPIOZ_7, EE_OFF),
+	MESON_PIN(GPIOZ_8, EE_OFF),
+	MESON_PIN(GPIOZ_9, EE_OFF),
+	MESON_PIN(GPIOZ_10, EE_OFF),
+	MESON_PIN(GPIOZ_11, EE_OFF),
+	MESON_PIN(GPIOZ_12, EE_OFF),
+	MESON_PIN(GPIOZ_13, EE_OFF),
+	MESON_PIN(GPIOZ_14, EE_OFF),
+	MESON_PIN(GPIOZ_15, EE_OFF),
+
+	MESON_PIN(GPIOH_0, EE_OFF),
+	MESON_PIN(GPIOH_1, EE_OFF),
+	MESON_PIN(GPIOH_2, EE_OFF),
+	MESON_PIN(GPIOH_3, EE_OFF),
+	MESON_PIN(GPIOH_4, EE_OFF),
+	MESON_PIN(GPIOH_5, EE_OFF),
+	MESON_PIN(GPIOH_6, EE_OFF),
+	MESON_PIN(GPIOH_7, EE_OFF),
+	MESON_PIN(GPIOH_8, EE_OFF),
+	MESON_PIN(GPIOH_9, EE_OFF),
+
+	MESON_PIN(BOOT_0, EE_OFF),
+	MESON_PIN(BOOT_1, EE_OFF),
+	MESON_PIN(BOOT_2, EE_OFF),
+	MESON_PIN(BOOT_3, EE_OFF),
+	MESON_PIN(BOOT_4, EE_OFF),
+	MESON_PIN(BOOT_5, EE_OFF),
+	MESON_PIN(BOOT_6, EE_OFF),
+	MESON_PIN(BOOT_7, EE_OFF),
+	MESON_PIN(BOOT_8, EE_OFF),
+	MESON_PIN(BOOT_9, EE_OFF),
+	MESON_PIN(BOOT_10, EE_OFF),
+	MESON_PIN(BOOT_11, EE_OFF),
+	MESON_PIN(BOOT_12, EE_OFF),
+	MESON_PIN(BOOT_13, EE_OFF),
+	MESON_PIN(BOOT_14, EE_OFF),
+	MESON_PIN(BOOT_15, EE_OFF),
+
+	MESON_PIN(CARD_0, EE_OFF),
+	MESON_PIN(CARD_1, EE_OFF),
+	MESON_PIN(CARD_2, EE_OFF),
+	MESON_PIN(CARD_3, EE_OFF),
+	MESON_PIN(CARD_4, EE_OFF),
+	MESON_PIN(CARD_5, EE_OFF),
+	MESON_PIN(CARD_6, EE_OFF),
+
+	MESON_PIN(GPIODV_0, EE_OFF),
+	MESON_PIN(GPIODV_1, EE_OFF),
+	MESON_PIN(GPIODV_2, EE_OFF),
+	MESON_PIN(GPIODV_3, EE_OFF),
+	MESON_PIN(GPIODV_4, EE_OFF),
+	MESON_PIN(GPIODV_5, EE_OFF),
+	MESON_PIN(GPIODV_6, EE_OFF),
+	MESON_PIN(GPIODV_7, EE_OFF),
+	MESON_PIN(GPIODV_8, EE_OFF),
+	MESON_PIN(GPIODV_9, EE_OFF),
+	MESON_PIN(GPIODV_10, EE_OFF),
+	MESON_PIN(GPIODV_11, EE_OFF),
+	MESON_PIN(GPIODV_12, EE_OFF),
+	MESON_PIN(GPIODV_13, EE_OFF),
+	MESON_PIN(GPIODV_14, EE_OFF),
+	MESON_PIN(GPIODV_15, EE_OFF),
+	MESON_PIN(GPIODV_16, EE_OFF),
+	MESON_PIN(GPIODV_17, EE_OFF),
+	MESON_PIN(GPIODV_18, EE_OFF),
+	MESON_PIN(GPIODV_19, EE_OFF),
+	MESON_PIN(GPIODV_20, EE_OFF),
+	MESON_PIN(GPIODV_21, EE_OFF),
+	MESON_PIN(GPIODV_22, EE_OFF),
+	MESON_PIN(GPIODV_23, EE_OFF),
+	MESON_PIN(GPIODV_24, EE_OFF),
+	MESON_PIN(GPIODV_25, EE_OFF),
+	MESON_PIN(GPIODV_26, EE_OFF),
+	MESON_PIN(GPIODV_27, EE_OFF),
+	MESON_PIN(GPIODV_28, EE_OFF),
+	MESON_PIN(GPIODV_29, EE_OFF),
+
+	MESON_PIN(GPIOX_0, EE_OFF),
+	MESON_PIN(GPIOX_1, EE_OFF),
+	MESON_PIN(GPIOX_2, EE_OFF),
+	MESON_PIN(GPIOX_3, EE_OFF),
+	MESON_PIN(GPIOX_4, EE_OFF),
+	MESON_PIN(GPIOX_5, EE_OFF),
+	MESON_PIN(GPIOX_6, EE_OFF),
+	MESON_PIN(GPIOX_7, EE_OFF),
+	MESON_PIN(GPIOX_8, EE_OFF),
+	MESON_PIN(GPIOX_9, EE_OFF),
+	MESON_PIN(GPIOX_10, EE_OFF),
+	MESON_PIN(GPIOX_11, EE_OFF),
+	MESON_PIN(GPIOX_12, EE_OFF),
+	MESON_PIN(GPIOX_13, EE_OFF),
+	MESON_PIN(GPIOX_14, EE_OFF),
+	MESON_PIN(GPIOX_15, EE_OFF),
+	MESON_PIN(GPIOX_16, EE_OFF),
+	MESON_PIN(GPIOX_17, EE_OFF),
+	MESON_PIN(GPIOX_18, EE_OFF),
+
+	MESON_PIN(GPIOCLK_0, EE_OFF),
+	MESON_PIN(GPIOCLK_1, EE_OFF),
+
+	MESON_PIN(GPIO_TEST_N, EE_OFF),
+};
 
 static const unsigned int emmc_nand_d07_pins[] = {
 	PIN(BOOT_0, EE_OFF), PIN(BOOT_1, EE_OFF), PIN(BOOT_2, EE_OFF),
@@ -45,8 +158,8 @@ static const unsigned int sdio_d0_pins[] = { PIN(GPIOX_0, EE_OFF) };
 static const unsigned int sdio_d1_pins[] = { PIN(GPIOX_1, EE_OFF) };
 static const unsigned int sdio_d2_pins[] = { PIN(GPIOX_2, EE_OFF) };
 static const unsigned int sdio_d3_pins[] = { PIN(GPIOX_3, EE_OFF) };
-static const unsigned int sdio_cmd_pins[] = { PIN(GPIOX_4, EE_OFF) };
-static const unsigned int sdio_clk_pins[] = { PIN(GPIOX_5, EE_OFF) };
+static const unsigned int sdio_clk_pins[] = { PIN(GPIOX_4, EE_OFF) };
+static const unsigned int sdio_cmd_pins[] = { PIN(GPIOX_5, EE_OFF) };
 static const unsigned int sdio_irq_pins[] = { PIN(GPIOX_7, EE_OFF) };
 
 static const unsigned int nand_ce0_pins[]	= { PIN(BOOT_8, EE_OFF) };
@@ -147,6 +260,19 @@ static const unsigned int tsin_a_dp_pins[] = {
 	PIN(GPIODV_5, EE_OFF),
 	PIN(GPIODV_6, EE_OFF),
 	PIN(GPIODV_7, EE_OFF),
+};
+
+static const struct pinctrl_pin_desc meson_gxl_aobus_pins[] = {
+	MESON_PIN(GPIOAO_0, 0),
+	MESON_PIN(GPIOAO_1, 0),
+	MESON_PIN(GPIOAO_2, 0),
+	MESON_PIN(GPIOAO_3, 0),
+	MESON_PIN(GPIOAO_4, 0),
+	MESON_PIN(GPIOAO_5, 0),
+	MESON_PIN(GPIOAO_6, 0),
+	MESON_PIN(GPIOAO_7, 0),
+	MESON_PIN(GPIOAO_8, 0),
+	MESON_PIN(GPIOAO_9, 0),
 };
 
 static const unsigned int uart_tx_ao_a_pins[]	= { PIN(GPIOAO_0, 0) };
@@ -254,7 +380,6 @@ static struct meson_pmx_group meson_gxl_periphs_groups[] = {
 	GPIO_GROUP(GPIODV_15, EE_OFF),
 	GPIO_GROUP(GPIODV_16, EE_OFF),
 	GPIO_GROUP(GPIODV_17, EE_OFF),
-	GPIO_GROUP(GPIODV_18, EE_OFF),
 	GPIO_GROUP(GPIODV_19, EE_OFF),
 	GPIO_GROUP(GPIODV_20, EE_OFF),
 	GPIO_GROUP(GPIODV_21, EE_OFF),
@@ -289,6 +414,8 @@ static struct meson_pmx_group meson_gxl_periphs_groups[] = {
 
 	GPIO_GROUP(GPIOCLK_0, EE_OFF),
 	GPIO_GROUP(GPIOCLK_1, EE_OFF),
+
+	GPIO_GROUP(GPIO_TEST_N, EE_OFF),
 
 	/* Bank X */
 	GROUP(sdio_d0,		5,	31),
@@ -414,8 +541,6 @@ static struct meson_pmx_group meson_gxl_aobus_groups[] = {
 	GPIO_GROUP(GPIOAO_8, 0),
 	GPIO_GROUP(GPIOAO_9, 0),
 
-	GPIO_GROUP(GPIO_TEST_N, 0),
-
 	/* bank AO */
 	GROUP(uart_tx_ao_b_0,	0,	26),
 	GROUP(uart_rx_ao_b_1,	0,	25),
@@ -472,7 +597,8 @@ static const char * const gpio_periphs_groups[] = {
 	"GPIOX_5", "GPIOX_6", "GPIOX_7", "GPIOX_8", "GPIOX_9",
 	"GPIOX_10", "GPIOX_11", "GPIOX_12", "GPIOX_13", "GPIOX_14",
 	"GPIOX_15", "GPIOX_16", "GPIOX_17", "GPIOX_18",
-	"GPIOCLK_0", "GPIOCLK_1",
+
+	"GPIO_TEST_N",
 };
 
 static const char * const emmc_groups[] = {
@@ -587,8 +713,6 @@ static const char * const tsin_a_groups[] = {
 static const char * const gpio_aobus_groups[] = {
 	"GPIOAO_0", "GPIOAO_1", "GPIOAO_2", "GPIOAO_3", "GPIOAO_4",
 	"GPIOAO_5", "GPIOAO_6", "GPIOAO_7", "GPIOAO_8", "GPIOAO_9",
-
-	"GPIO_TEST_N",
 };
 
 static const char * const uart_ao_groups[] = {
@@ -676,64 +800,43 @@ static struct meson_pmx_func meson_gxl_aobus_functions[] = {
 };
 
 static struct meson_bank meson_gxl_periphs_banks[] = {
-	/*   name    first                      last                    pullen  pull    dir     out     in  */
-	BANK("X",    PIN(GPIOX_0, EE_OFF),	PIN(GPIOX_18, EE_OFF),  4,  0,  4,  0,  12, 0,  13, 0,  14, 0),
-	BANK("DV",   PIN(GPIODV_0, EE_OFF),	PIN(GPIODV_29, EE_OFF), 0,  0,  0,  0,  0,  0,  1,  0,  2,  0),
-	BANK("H",    PIN(GPIOH_0, EE_OFF),	PIN(GPIOH_9, EE_OFF),   1, 20,  1, 20,  3, 20,  4, 20,  5, 20),
-	BANK("Z",    PIN(GPIOZ_0, EE_OFF),	PIN(GPIOZ_15, EE_OFF),  3,  0,  3,  0,  9,  0,  10, 0, 11,  0),
-	BANK("CARD", PIN(CARD_0, EE_OFF),	PIN(CARD_6, EE_OFF),    2, 20,  2, 20,  6, 20,  7, 20,  8, 20),
-	BANK("BOOT", PIN(BOOT_0, EE_OFF),	PIN(BOOT_15, EE_OFF),   2,  0,  2,  0,  6,  0,  7,  0,  8,  0),
-	BANK("CLK",  PIN(GPIOCLK_0, EE_OFF),	PIN(GPIOCLK_1, EE_OFF), 3, 28,  3, 28,  9, 28, 10, 28, 11, 28),
+	/*   name    first                      last                    irq	  pullen  pull    dir     out     in  */
+	BANK("X",    PIN(GPIOX_0, EE_OFF),	PIN(GPIOX_18, EE_OFF),   89, 107, 4,  0,  4,  0,  12, 0,  13, 0,  14, 0),
+	BANK("DV",   PIN(GPIODV_0, EE_OFF),	PIN(GPIODV_29, EE_OFF),  83,  88, 0,  0,  0,  0,  0,  0,  1,  0,  2,  0),
+	BANK("H",    PIN(GPIOH_0, EE_OFF),	PIN(GPIOH_9, EE_OFF),    26,  35, 1, 20,  1, 20,  3, 20,  4, 20,  5, 20),
+	BANK("Z",    PIN(GPIOZ_0, EE_OFF),	PIN(GPIOZ_15, EE_OFF),   10,  25, 3,  0,  3,  0,  9,  0,  10, 0, 11,  0),
+	BANK("CARD", PIN(CARD_0, EE_OFF),	PIN(CARD_6, EE_OFF),     52,  58, 2, 20,  2, 20,  6, 20,  7, 20,  8, 20),
+	BANK("BOOT", PIN(BOOT_0, EE_OFF),	PIN(BOOT_15, EE_OFF),    36,  51, 2,  0,  2,  0,  6,  0,  7,  0,  8,  0),
+	BANK("CLK",  PIN(GPIOCLK_0, EE_OFF),	PIN(GPIOCLK_1, EE_OFF), 108, 109, 3, 28,  3, 28,  9, 28, 10, 28, 11, 28),
 };
 
 static struct meson_bank meson_gxl_aobus_banks[] = {
-	/*   name    first              last              pullen  pull    dir     out     in  */
-	BANK("AO",   PIN(GPIOAO_0, 0),  PIN(GPIOAO_9, 0), 0,  0,  0, 16,  0,  0,  0, 16,  1,  0),
+	/*   name    first              last              irq	pullen  pull    dir     out     in  */
+	BANK("AO",   PIN(GPIOAO_0, 0),  PIN(GPIOAO_9, 0), 0, 9, 0,  0,  0, 16,  0,  0,  0, 16,  1,  0),
 };
 
 struct meson_pinctrl_data meson_gxl_periphs_pinctrl_data = {
 	.name		= "periphs-banks",
-	.pin_base	= 11,
+	.pin_base	= 10,
+	.pins		= meson_gxl_periphs_pins,
 	.groups		= meson_gxl_periphs_groups,
 	.funcs		= meson_gxl_periphs_functions,
 	.banks		= meson_gxl_periphs_banks,
-	.num_pins	= 100,
+	.num_pins	= ARRAY_SIZE(meson_gxl_periphs_pins),
 	.num_groups	= ARRAY_SIZE(meson_gxl_periphs_groups),
 	.num_funcs	= ARRAY_SIZE(meson_gxl_periphs_functions),
 	.num_banks	= ARRAY_SIZE(meson_gxl_periphs_banks),
-	.gpio_driver	= &meson_gx_gpio_driver,
 };
 
 struct meson_pinctrl_data meson_gxl_aobus_pinctrl_data = {
 	.name		= "aobus-banks",
 	.pin_base	= 0,
+	.pins		= meson_gxl_aobus_pins,
 	.groups		= meson_gxl_aobus_groups,
 	.funcs		= meson_gxl_aobus_functions,
 	.banks		= meson_gxl_aobus_banks,
-	.num_pins	= 11,
+	.num_pins	= ARRAY_SIZE(meson_gxl_aobus_pins),
 	.num_groups	= ARRAY_SIZE(meson_gxl_aobus_groups),
 	.num_funcs	= ARRAY_SIZE(meson_gxl_aobus_functions),
 	.num_banks	= ARRAY_SIZE(meson_gxl_aobus_banks),
-	.gpio_driver	= &meson_gx_gpio_driver,
-};
-
-static const struct udevice_id meson_gxl_pinctrl_match[] = {
-	{
-		.compatible = "amlogic,meson-gxl-periphs-pinctrl",
-		.data = (ulong)&meson_gxl_periphs_pinctrl_data,
-	},
-	{
-		.compatible = "amlogic,meson-gxl-aobus-pinctrl",
-		.data = (ulong)&meson_gxl_aobus_pinctrl_data,
-	},
-	{ /* sentinel */ }
-};
-
-U_BOOT_DRIVER(meson_gxl_pinctrl) = {
-	.name = "meson-gxl-pinctrl",
-	.id = UCLASS_PINCTRL,
-	.of_match = of_match_ptr(meson_gxl_pinctrl_match),
-	.probe = meson_pinctrl_probe,
-	.priv_auto_alloc_size = sizeof(struct meson_pinctrl),
-	.ops = &meson_gx_pinctrl_ops,
 };

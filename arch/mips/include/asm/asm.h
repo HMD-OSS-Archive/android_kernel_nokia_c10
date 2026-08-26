@@ -1,5 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0 */
 /*
+ * This file is subject to the terms and conditions of the GNU General Public
+ * License.  See the file "COPYING" in the main directory of this archive
+ * for more details.
+ *
  * Copyright (C) 1995, 1996, 1997, 1999, 2001 by Ralf Baechle
  * Copyright (C) 1999 by Silicon Graphics, Inc.
  * Copyright (C) 2001 MIPS Technologies, Inc.
@@ -15,6 +18,7 @@
 #define __ASM_ASM_H
 
 #include <asm/sgidefs.h>
+#include <asm/asm-eva.h>
 
 #ifndef CAT
 #ifdef __STDC__
@@ -42,12 +46,6 @@
 #define CPLOAD(register)
 #endif
 
-#define ENTRY(symbol)					\
-		.globl	symbol;				\
-		.type	symbol, @function;		\
-		.ent	symbol, 0;			\
-symbol:
-
 /*
  * LEAF - declare leaf routine
  */
@@ -56,8 +54,9 @@ symbol:
 		.align	2;				\
 		.type	symbol, @function;		\
 		.ent	symbol, 0;			\
-		.section .text.symbol, "x";             \
-symbol:		.frame	sp, 0, ra
+symbol:		.frame	sp, 0, ra;			\
+		.cfi_startproc;				\
+		.insn
 
 /*
  * NESTED - declare nested routine entry point
@@ -67,13 +66,15 @@ symbol:		.frame	sp, 0, ra
 		.align	2;				\
 		.type	symbol, @function;		\
 		.ent	symbol, 0;			\
-		.section .text.symbol, "x";             \
-symbol:		.frame	sp, framesize, rpc
+symbol:		.frame	sp, framesize, rpc;		\
+		.cfi_startproc;				\
+		.insn
 
 /*
  * END - mark end of function
  */
 #define END(function)					\
+		.cfi_endproc;				\
 		.end	function;			\
 		.size	function, .-function
 
@@ -90,7 +91,7 @@ symbol:
 #define FEXPORT(symbol)					\
 		.globl	symbol;				\
 		.type	symbol, @function;		\
-symbol:
+symbol:		.insn
 
 /*
  * ABS - export absolute symbol
@@ -148,7 +149,7 @@ symbol		=	value
  */
 #ifdef CONFIG_CPU_HAS_PREFETCH
 
-#define PREF(hint, addr)				\
+#define PREF(hint,addr)					\
 		.set	push;				\
 		.set	arch=r5000;			\
 		pref	hint, addr;			\
@@ -161,7 +162,7 @@ symbol		=	value
 		prefe	hint, addr;			\
 		.set	pop
 
-#define PREFX(hint, addr)				\
+#define PREFX(hint,addr)				\
 		.set	push;				\
 		.set	arch=r5000;			\
 		prefx	hint, addr;			\
@@ -416,7 +417,7 @@ symbol		=	value
 #ifdef CONFIG_SGI_IP28
 /* Inhibit speculative stores to volatile (e.g.DMA) or invalid addresses. */
 #include <asm/cacheops.h>
-#define R10KCBARRIER(addr)  cache   CACHE_BARRIER, addr;
+#define R10KCBARRIER(addr)  cache   Cache_Barrier, addr;
 #else
 #define R10KCBARRIER(addr)
 #endif
